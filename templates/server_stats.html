@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Server Stats{% endblock %}
+{% block content %}
+<h2>Server Stats</h2>
+<p>Real-time server statistics (updates every 3 seconds)</p>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+    <!-- RAM Usage -->
+    <div class="card">
+        <h3>Memory (RAM)</h3>
+        <div style="margin: 1rem 0;">
+            <p><strong>Usage:</strong> <span id="ram-used">--</span> GB / <span id="ram-total">--</span> GB</p>
+            <div style="width: 100%; background: #e9ecef; border-radius: 8px; height: 20px; overflow: hidden;">
+                <div id="ram-bar" style="height: 100%; background: linear-gradient(90deg, #28a745, #ffc107, #dc3545); width: 0%; transition: width 0.3s ease;"></div>
+            </div>
+            <p style="margin-top: 0.5rem;"><strong><span id="ram-percent">--</span>%</strong></p>
+        </div>
+    </div>
+
+    <!-- CPU Usage -->
+    <div class="card">
+        <h3>CPU</h3>
+        <div style="margin: 1rem 0;">
+            <p><strong>Cores:</strong> <span id="cpu-count">--</span></p>
+            <div style="width: 100%; background: #e9ecef; border-radius: 8px; height: 20px; overflow: hidden;">
+                <div id="cpu-bar" style="height: 100%; background: linear-gradient(90deg, #28a745, #ffc107, #dc3545); width: 0%; transition: width 0.3s ease;"></div>
+            </div>
+            <p style="margin-top: 0.5rem;"><strong><span id="cpu-percent">--</span>%</strong></p>
+        </div>
+    </div>
+
+    <!-- Disk Usage -->
+    <div class="card">
+        <h3>Disk Storage</h3>
+        <div style="margin: 1rem 0;">
+            <p><strong>Usage:</strong> <span id="disk-used">--</span> GB / <span id="disk-total">--</span> GB</p>
+            <div style="width: 100%; background: #e9ecef; border-radius: 8px; height: 20px; overflow: hidden;">
+                <div id="disk-bar" style="height: 100%; background: linear-gradient(90deg, #28a745, #ffc107, #dc3545); width: 0%; transition: width 0.3s ease;"></div>
+            </div>
+            <p style="margin-top: 0.5rem;"><strong><span id="disk-percent">--</span>%</strong></p>
+        </div>
+    </div>
+
+    <!-- Network -->
+    <div class="card">
+        <h3>Network</h3>
+        <div style="margin: 1rem 0;">
+            <p><strong>Active Network Interfaces:</strong> <span id="net-interfaces">--</span></p>
+            <p><strong>Active Connections:</strong> <span id="net-connections">--</span></p>
+        </div>
+    </div>
+</div>
+
+<div style="margin-top: 2rem; text-align: center; color: #666;">
+    <p>Last updated: <span id="last-updated">--</span></p>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const socket = io();
+const STATS_INTERVAL = 3000; // 3 seconds
+
+function updateStats(data) {
+    // RAM
+    document.getElementById("ram-used").textContent = data.ram.used_gb;
+    document.getElementById("ram-total").textContent = data.ram.total_gb;
+    document.getElementById("ram-percent").textContent = data.ram.percent;
+    document.getElementById("ram-bar").style.width = data.ram.percent + "%";
+    
+    // CPU
+    document.getElementById("cpu-count").textContent = data.cpu.count;
+    document.getElementById("cpu-percent").textContent = data.cpu.percent;
+    document.getElementById("cpu-bar").style.width = data.cpu.percent + "%";
+    
+    // Disk
+    document.getElementById("disk-used").textContent = data.disk.used_gb;
+    document.getElementById("disk-total").textContent = data.disk.total_gb;
+    document.getElementById("disk-percent").textContent = data.disk.percent;
+    document.getElementById("disk-bar").style.width = data.disk.percent + "%";
+    
+    // Network
+    document.getElementById("net-interfaces").textContent = data.network.active_interfaces;
+    document.getElementById("net-connections").textContent = data.network.connections;
+    
+    // Timestamp
+    const date = new Date(data.timestamp);
+    document.getElementById("last-updated").textContent = date.toLocaleTimeString();
+}
+
+socket.on("server_stats", (data) => {
+    updateStats(data);
+});
+
+// Request stats on connect and then periodically
+socket.on("connect", () => {
+    socket.emit("request_stats", {});
+    
+    // Set up interval to request stats every 3 seconds
+    setInterval(() => {
+        socket.emit("request_stats", {});
+    }, STATS_INTERVAL);
+});
+</script>
+{% endblock %}

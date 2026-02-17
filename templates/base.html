@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html id="htmlElement">
+<head>
+    <link rel="stylesheet" href="static/style.css">
+    <title>{% block title %}Campus Hub{% endblock %}</title>
+</head>
+<body>
+    <header>
+        <a href="{{ url_for('home') }}">🏠 Campus Hub</a>
+        <div style="display: flex; gap: 10px;">
+            <button id="themeToggle" type="button">🌙 Dark Mode</button>
+            <form action="{{ url_for('set_username') }}" method="get" style="margin:0;">
+                <button type="submit" style="background-color: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 12px; color: white; cursor: pointer; border-radius: 4px; font-size: 14px;">Change Username</button>
+            </form>
+        </div>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    
+    <script>
+        // Theme toggle functionality
+        const htmlElement = document.getElementById('htmlElement');
+        const themeToggle = document.getElementById('themeToggle');
+        
+        // Load theme from localStorage or default to light mode
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        htmlElement.setAttribute('data-theme', currentTheme);
+        updateThemeToggleText();
+        
+        // Toggle theme
+        themeToggle.addEventListener('click', function() {
+            const theme = htmlElement.getAttribute('data-theme');
+            const newTheme = theme === 'light' ? 'dark' : 'light';
+            htmlElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeToggleText();
+        });
+        
+        function updateThemeToggleText() {
+            const theme = htmlElement.getAttribute('data-theme');
+            themeToggle.textContent = theme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode';
+        }
+    </script>
+</body>
+</html>

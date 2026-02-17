@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<h2>Welcome, {{ username }}!</h2>
+<h3>Available Features:</h3>
+<ul>
+    <li><a href="/chat">Chat</a></li>
+    <li><a href="/server-stats">Server Stats</a></li>
+    <li><a href="#">Game 1 (Coming Soon)</a></li>
+    <li><a href="#">Game 2 (Coming Soon)</a></li>
+</ul>
+{% endblock %}
