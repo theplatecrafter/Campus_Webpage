@@ -230,6 +230,35 @@ to undo:
 sudo systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target
 ```
 ---
+## Disable GUI (pour all CPU, network, and RAM to simple terminal)
+This will allow the ubuntu desktop LTS to run on a terminal, instead of a full desktop. You can disable this anytime you want to get back to normal GUI mode.
+Before doing this however, it is recommended to make sure the wifi is set to auto-reconnect
+
+to enable terminal mode:
+```bash
+sudo systemctl set-default multi-user.target
+```
+reboot:
+```bash
+sudo reboot
+```
+the computer will boot to the Ubuntu terminal.
+
+you can check what process Ubuntu is running by running:
+```bash
+top
+```
+or
+```bash
+htop
+```
+
+to disable terminal mode (in a ssh terminal or local terminal):
+```bash
+sudo systemctl set-default graphical.target
+sudo reboot
+```
+---
 ## Connect to Server Terminal with Another Linux Terminal
 Connect with:
 ```bash
