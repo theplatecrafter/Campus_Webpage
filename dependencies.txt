@@ -1,1 +1,4 @@
-flask flask_socketio better_profanity psutil
+flask
+flask_socketio
+better_profanity
+psutil

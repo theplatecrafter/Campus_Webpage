@@ -109,7 +109,7 @@ sudo apt install git
 Clone your the working tree repository:
 
 ```bash
-git clone https://github.com/theplatecrafter/Campus_Webpage/tree/working
+git clone https://github.com/theplatecrafter/Campus_Webpage
 cd Campus_Webpage
 ```
 
