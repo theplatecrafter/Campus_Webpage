@@ -4,7 +4,7 @@
     "username": "theplatecrafter",
     "message": "test",
     "timestamp": "2026-02-17T20:07:24.280658",
-    "read_count": 2,
+    "read_count": 1,
     "reply_to_id": null,
     "ip_address": "172.24.130.62",
     "edited": false
@@ -64,7 +64,7 @@
     "username": "DEV",
     "message": "hi",
     "timestamp": "2026-02-17T20:48:51.108839",
-    "read_count": 1,
+    "read_count": 0,
     "reply_to_id": null,
     "ip_address": "172.24.130.62",
     "edited": false
@@ -74,19 +74,9 @@
     "username": "DEV",
     "message": "hi",
     "timestamp": "2026-02-17T20:48:53.184698",
-    "read_count": 1,
+    "read_count": 0,
     "reply_to_id": 6,
     "ip_address": "172.24.130.62",
-    "edited": false
-  },
-  {
-    "id": 9,
-    "username": "navi",
-    "message": "HELLO",
-    "timestamp": "2026-02-17T22:06:58.175514",
-    "read_count": 0,
-    "reply_to_id": null,
-    "ip_address": "172.24.133.2",
     "edited": false
   }
 ]

@@ -7,6 +7,7 @@ import atexit
 import psutil
 import socket
 import json
+import os
 
 # ============================================================================
 # CONFIGURATION & INITIALIZATION
@@ -233,6 +234,9 @@ def get_server_stats():
         "timestamp": datetime.now().isoformat()
     }
 
+# ============================================================================
+# APP INITIALIZATION
+# ============================================================================
 
 
 def exit_function():
@@ -240,11 +244,15 @@ def exit_function():
     save_all_chat_messages_to_disk()
 
 
-
-
 def create_app():
     app = Flask(__name__)
-    app.secret_key = "dev-secret-change-later"
+    app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(32)
+    app.config.update(
+        SESSION_COOKIE_SECURE=False,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+    )
+
 
     socketio.init_app(app)
 
@@ -360,10 +368,6 @@ def create_app():
 
     return app
 
-
-# ============================================================================
-# APP INITIALIZATION
-# ============================================================================
 
 app = create_app()
 atexit.register(exit_function)
