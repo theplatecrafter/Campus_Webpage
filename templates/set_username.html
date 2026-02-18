@@ -1,9 +1,39 @@
 {% extends "base.html" %}
-{% block title %}Server Stats{% endblock %}
+{% block title %}Set Username{% endblock %}
 {% block content %}
-<h2>Choose a Username</h2>
+<h2>{% if change_mode %}Change Username{% else %}Choose a Username{% endif %}</h2>
+
+{% if error_message %}
+<div style="padding: 12px 16px; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 4px; margin-bottom: 20px;">
+    <strong>Error:</strong> {{ error_message }}
+</div>
+{% endif %}
+
+{% if existing_usernames %}
+<div style="margin-bottom: 20px; padding: 15px; background: var(--bg-secondary); border-radius: 8px;">
+    <p><strong>Previously used usernames:</strong></p>
+    <ul style="list-style: none; padding: 0;">
+        {% for username in existing_usernames %}
+        <li style="padding: 5px 0;">
+            <form method="POST" style="display: inline;">
+                <input type="hidden" name="username" value="{{ username }}">
+                <button type="submit" style="background: none; border: none; color: var(--primary-red); cursor: pointer; text-decoration: underline; font-size: 1rem;">{% if not change_mode %}Continue as {% endif %}{{ username }}</button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+    {% if not change_mode %}
+    <hr style="margin: 10px 0;">
+    <p><strong>Or create a new username:</strong></p>
+    {% else %}
+    <hr style="margin: 10px 0;">
+    <p><strong>Or create a new username:</strong></p>
+    {% endif %}
+</div>
+{% endif %}
+
 <form method="POST">
-    <input type="text" name="username" required>
+    <input type="text" name="username" placeholder="Enter username" required>
     <button type="submit">Enter</button>
 </form>
 

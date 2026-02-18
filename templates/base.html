@@ -1,46 +1,37 @@
 <!DOCTYPE html>
-<html id="htmlElement">
+<html id="htmlElement" lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="LAN Hub">
     <link rel="stylesheet" href="static/style.css">
     <title>{% block title %}Campus Hub{% endblock %}</title>
 </head>
 <body>
     <header>
-        <a href="{{ url_for('home') }}">🏠 Campus Hub</a>
-        <div style="display: flex; gap: 10px;">
-            <button id="themeToggle" type="button">🌙 Dark Mode</button>
-            <form action="{{ url_for('set_username') }}" method="get" style="margin:0;">
-                <button type="submit" style="background-color: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 12px; color: white; cursor: pointer; border-radius: 4px; font-size: 14px;">Change Username</button>
-            </form>
+        <div class="header-content">
+            <div class="header-left">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <a href="{{ url_for('home') }}" class="header-logo">LAN Hub</a>
+                    <span class="network-badge">Server hosted in: {{ network_name }}</span>
+                </div>
+                <p class="header-subtitle">Chats, Games, and Tools for LAN</p>
+            </div>
+            <div class="header-right">
+                <form action="{{ url_for('set_username', change=1) }}" method="get" class="change-username-form">
+                    <button type="submit" class="btn-secondary">👤 Change Active Username</button>
+                </form>
+            </div>
         </div>
     </header>
     <main>
         {% block content %}{% endblock %}
     </main>
-    
-    <script>
-        // Theme toggle functionality
-        const htmlElement = document.getElementById('htmlElement');
-        const themeToggle = document.getElementById('themeToggle');
-        
-        // Load theme from localStorage or default to light mode
-        const currentTheme = localStorage.getItem('theme') || 'light';
-        htmlElement.setAttribute('data-theme', currentTheme);
-        updateThemeToggleText();
-        
-        // Toggle theme
-        themeToggle.addEventListener('click', function() {
-            const theme = htmlElement.getAttribute('data-theme');
-            const newTheme = theme === 'light' ? 'dark' : 'light';
-            htmlElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            updateThemeToggleText();
-        });
-        
-        function updateThemeToggleText() {
-            const theme = htmlElement.getAttribute('data-theme');
-            themeToggle.textContent = theme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode';
-        }
-    </script>
+    <footer>
+        <div class="footer-content">
+            <p>&copy; 2026 Campus Hub. Connect, share, and collaborate.</p>
+            <p class="footer-secondary">Built for community engagement</p>
+        </div>
+    </footer>
 </body>
 </html>

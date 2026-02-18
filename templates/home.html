@@ -1,12 +1,80 @@
 {% extends "base.html" %}
 {% block title %}Home{% endblock %}
 {% block content %}
-<h2>Welcome, {{ username }}!</h2>
-<h3>Available Features:</h3>
-<ul>
-    <li><a href="/chat">Chat</a></li>
-    <li><a href="/server-stats">Server Stats</a></li>
-    <li><a href="#">Game 1 (Coming Soon)</a></li>
-    <li><a href="#">Game 2 (Coming Soon)</a></li>
-</ul>
+<h1>Active username: {{ username }}</h1>
+<p style="color: var(--text-secondary); margin-bottom: 2rem;">This page allows users to connect with other users on the same network via various features.</p>
+
+<!-- Communication Section -->
+<h2 class="section-title">💬 Communication</h2>
+<div class="feature-grid">
+    <div class="feature-card">
+        <div class="feature-card-icon">💬</div>
+        <div class="feature-card-title">Live Chat</div>
+        <p class="feature-card-description">Chat with other users on the same network in real-time.</p>
+        <a href="/chat" class="feature-card-link">Open Chat →</a>
+    </div>
+</div>
+
+<!-- Server Information Section -->
+<h2 class="section-title">📊 Server Information</h2>
+<div class="feature-grid">
+    <div class="feature-card">
+        <div class="feature-card-icon">📈</div>
+        <div class="feature-card-title">Server Stats</div>
+        <p class="feature-card-description">Monitor real-time server performance.</p>
+        <a href="/server-stats" class="feature-card-link">View Stats →</a>
+    </div>
+</div>
+
+<!-- Games Section -->
+<h2 class="section-title">🎮 Games</h2>
+<div class="feature-grid">
+    <div class="feature-card">
+        <div class="feature-card-icon">🎯</div>
+        <div class="feature-card-title">Game 1</div>
+        <p class="feature-card-description">???</p>
+        <a href="#" class="feature-card-link" style="opacity: 0.5; pointer-events: none; cursor: not-allowed;">Coming Soon ⏳</a>
+    </div>
+    <div class="feature-card">
+        <div class="feature-card-icon">🎲</div>
+        <div class="feature-card-title">Game 2</div>
+        <p class="feature-card-description">???</p>
+        <a href="#" class="feature-card-link" style="opacity: 0.5; pointer-events: none; cursor: not-allowed;">Coming Soon ⏳</a>
+    </div>
+</div>
+
+<!-- Tools Section -->
+<h2 class="section-title">🛠️ Tools</h2>
+<div class="feature-grid">
+    <div class="feature-card">
+        <div class="feature-card-icon">🔧</div>
+        <div class="feature-card-title">Tool 1</div>
+        <p class="feature-card-description">???</p>
+        <a href="#" class="feature-card-link" style="opacity: 0.5; pointer-events: none; cursor: not-allowed;">Coming Soon ⏳</a>
+    </div>
+    <div class="feature-card">
+        <div class="feature-card-icon">⚙️</div>
+        <div class="feature-card-title">Tool 2</div>
+        <p class="feature-card-description">???</p>
+        <a href="#" class="feature-card-link" style="opacity: 0.5; pointer-events: none; cursor: not-allowed;">Coming Soon ⏳</a>
+    </div>
+</div>
+
+<!-- Useful Links Section -->
+<h2 class="section-title">🔗 Useful Links</h2>
+<div class="feature-grid">
+    <div class="feature-card">
+        <div class="feature-card-icon">📚</div>
+        <div class="feature-card-title">Documentation</div>
+        <p class="feature-card-description">???</p>
+        <a href="#" class="feature-card-link" style="opacity: 0.5; pointer-events: none; cursor: not-allowed;">Coming Soon ⏳</a>
+    </div>
+    <div class="feature-card">
+        <div class="feature-card-icon">❓</div>
+        <div class="feature-card-title">Help & Support</div>
+        <p class="feature-card-description">???</p>
+        <a href="#" class="feature-card-link" style="opacity: 0.5; pointer-events: none; cursor: not-allowed;">Coming Soon ⏳</a>
+    </div>
+</div>
+
 {% endblock %}

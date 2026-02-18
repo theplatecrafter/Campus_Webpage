@@ -39,9 +39,9 @@ def load_users():
 
 def save_users(users_data):
     """Save users data to disk"""
-    os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
+    os.makedirs("features", exist_ok=True)
     with open(USERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(users_data, f, indent=2)
+        json.dump(users_data, f, indent=2, ensure_ascii=False)
 
 def track_username(ip_address, username):
     """Track a new username for an IP address"""
@@ -59,6 +59,24 @@ def get_usernames_for_ip(ip_address):
     """Get all usernames created by an IP address"""
     users_data = load_users()
     return users_data.get(ip_address, [])
+
+def get_most_recent_username(ip_address):
+    """Get the most recent (last) username for an IP address"""
+    usernames = get_usernames_for_ip(ip_address)
+    return usernames[-1] if usernames else None
+
+def is_valid_username_for_ip(ip_address, username):
+    """Verify that a username is actually registered for an IP address in users.json"""
+    usernames = get_usernames_for_ip(ip_address)
+    return username in usernames
+
+def username_exists(username):
+    """Check if a username exists anywhere in users.json (across all IPs)"""
+    users_data = load_users()
+    for ip, usernames in users_data.items():
+        if username in usernames:
+            return True
+    return False
 
 users_data = load_users()
 
@@ -122,6 +140,7 @@ def get_message_by_id(msg_id):
 
 def save_chat_message_to_disk(msg):
     """Append a single chat message to disk"""
+    os.makedirs("features/chat", exist_ok=True)
     with open(CHAT_FILE, "a", encoding="utf-8") as f:
         reply_to_id = msg.get("reply_to_id", None) or ""
         ip_addr = msg.get("ip_address", None) or ""
@@ -134,6 +153,7 @@ def save_all_chat_messages_to_disk():
     if chat_messages:
         new_messages = [msg for msg in chat_messages if msg["timestamp"] > server_start_time]
         if new_messages:
+            os.makedirs("features/chat", exist_ok=True)
             with open(CHAT_FILE, "a", encoding="utf-8") as f:
                 for msg in new_messages:
                     reply_to_id = msg.get("reply_to_id", None) or ""
@@ -220,27 +240,80 @@ def create_app():
 
     socketio.init_app(app)
 
+    def get_network_display():
+        """Return a friendly network name (FQDN if available, otherwise local IP)."""
+        try:
+            fqdn = socket.getfqdn()
+            if fqdn and '.' in fqdn and fqdn != socket.gethostname():
+                return fqdn
+            # Fallback to local IP address
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(("8.8.8.8", 80))
+                local_ip = s.getsockname()[0]
+            finally:
+                s.close()
+            return local_ip
+        except Exception:
+            return 'LAN'
+
+    @app.context_processor
+    def inject_network_name():
+        return {"network_name": get_network_display()}
+
     # ====================================================================
     # ROUTES - CORE
     # ====================================================================
 
     @app.route("/")
     def home():
-        if "username" not in session:
+        if "username" not in session or "ip_address" not in session:
+            return redirect(url_for("set_username"))
+        # Verify username is actually tracked for this IP in users.json
+        if not is_valid_username_for_ip(session["ip_address"], session["username"]):
+            session.clear()
             return redirect(url_for("set_username"))
         return render_template("home.html", username=session["username"])
 
     @app.route("/set-username", methods=["GET", "POST"])
     def set_username():
+        ip_address = request.remote_addr
+        session["ip_address"] = ip_address
+        change_mode = request.args.get("change") is not None
+        
+        # Check if this IP already has a username (only auto-load if not explicitly changing and not already in session)
+        existing_username = get_most_recent_username(ip_address)
+        if existing_username and "username" not in session and not change_mode:
+            # Auto-load the most recent username
+            session["username"] = existing_username
+            return redirect(url_for("home"))
+        
+        error_message = None
         if request.method == "POST":
             username = request.form["username"].strip()
-            if username and not is_blacklisted(username):
-                ip_address = request.remote_addr
+            user_previous_usernames = get_usernames_for_ip(ip_address)
+            if not username:
+                error_message = "Username cannot be empty"
+            elif is_blacklisted(username):
+                error_message = "Username contains inappropriate content"
+            elif username_exists(username) and username not in user_previous_usernames:
+                # Only block if username exists AND it's not one of their own previous usernames
+                error_message = f"Username '{username}' is already taken"
+            else:
                 session["username"] = username
                 session["ip_address"] = ip_address
                 track_username(ip_address, username)
+                # Reload users data in memory
+                global users_data
+                users_data = load_users()
                 return redirect(url_for("home"))
-        return render_template("set_username.html")
+        
+        # Display existing usernames for context if they exist, excluding current username
+        existing_usernames = get_usernames_for_ip(ip_address)
+        current_username = session.get("username")
+        # Filter out the current username from the list
+        existing_usernames = [u for u in existing_usernames if u != current_username]
+        return render_template("set_username.html", existing_usernames=existing_usernames, change_mode=change_mode, error_message=error_message)
 
     # ====================================================================
     # ROUTES - CHAT
@@ -248,7 +321,11 @@ def create_app():
 
     @app.route("/chat")
     def chat():
-        if "username" not in session:
+        if "username" not in session or "ip_address" not in session:
+            return redirect(url_for("set_username"))
+        # Verify username is actually tracked for this IP in users.json
+        if not is_valid_username_for_ip(session["ip_address"], session["username"]):
+            session.clear()
             return redirect(url_for("set_username"))
         return render_template("chat.html", username=session["username"], ip_address=session.get("ip_address"))
 
@@ -265,7 +342,11 @@ def create_app():
 
     @app.route("/server-stats")
     def server_stats():
-        if "username" not in session:
+        if "username" not in session or "ip_address" not in session:
+            return redirect(url_for("set_username"))
+        # Verify username is actually tracked for this IP in users.json
+        if not is_valid_username_for_ip(session["ip_address"], session["username"]):
+            session.clear()
             return redirect(url_for("set_username"))
         return render_template("server_stats.html", username=session["username"])
 
@@ -347,7 +428,8 @@ def handle_message(data):
         "message": msg["message"],
         "timestamp": msg["timestamp"].isoformat(),
         "read_count": msg["read_count"],
-        "reply_to_id": msg.get("reply_to_id")
+        "reply_to_id": msg.get("reply_to_id"),
+        "ip_address": msg.get("ip_address")
     }
     
     if "reply_to_username" in msg:
@@ -364,7 +446,8 @@ def message_read(data):
 
     for msg in chat_messages:
         if msg['id'] == msg_id:
-            if username not in msg['read_users']:
+            # Don't count the message sender as having read their own message
+            if username not in msg['read_users'] and username != msg['username']:
                 msg['read_users'].add(username)
                 msg['read_count'] = len(msg['read_users'])
                 emit("update_read_count", {"id": msg_id, "read_count": msg['read_count']}, broadcast=True)
