@@ -57,7 +57,7 @@
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script>
-const socket = io();
+const socket = io("/server-stats");
 const STATS_INTERVAL = 3000; // 3 seconds
 
 function updateStats(data) {

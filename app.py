@@ -1,5 +1,5 @@
 from flask import Flask, render_template, session, redirect, url_for, request
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from datetime import datetime, timezone
 from better_profanity import profanity
 import os
@@ -8,10 +8,15 @@ import psutil
 import socket
 import json
 import os
+import threading
+from collections import defaultdict, deque
+import time
+
 
 # ============================================================================
 # CONFIGURATION & INITIALIZATION
 # ============================================================================
+
 
 socketio = SocketIO(async_mode="threading")
 profanity.load_censor_words()
@@ -23,6 +28,22 @@ profanity.load_censor_words()
 def is_blacklisted(text: str) -> bool:
     """Check if text contains profanity"""
     return profanity.contains_profanity(text.lower())
+
+
+def is_rate_limited(key):
+    now = time.time()
+    window_start = now - RATE_LIMIT_WINDOW
+    timestamps = rate_limit_data[key]
+
+    # Remove old timestamps
+    while timestamps and timestamps[0] < window_start:
+        timestamps.popleft()
+
+    if len(timestamps) >= RATE_LIMIT_COUNT:
+        return True
+
+    timestamps.append(now)
+    return False
 
 
 # ============================================================================
@@ -92,6 +113,12 @@ CHAT_FILE = "features/chat/chat.json"
 chat_messages = []
 chat_message_id_counter = 1
 CHAT_MAX_MESSAGE_LENGTH = 200  # character limit for messages
+chat_lock = threading.Lock()
+RATE_LIMIT_COUNT = 5          # max messages
+RATE_LIMIT_WINDOW = 10        # seconds
+
+rate_limit_data = defaultdict(deque)
+
 
 
 def load_chat_messages():
@@ -377,63 +404,87 @@ atexit.register(exit_function)
 # SOCKETIO EVENTS - CHAT
 # ============================================================================
 
-@socketio.on("connect")
+@socketio.on("connect",namespace="/chat")
 def handle_connect():
     if "username" not in session:
         return False
-    emit("system_message", f"{session['username']} connected.", broadcast=True)
+    emit("system_message", f"{session['username']} connected.", broadcast=True,namespace="/chat")
 
 
-@socketio.on("disconnect")
+@socketio.on("disconnect",namespace="/chat")
 def handle_disconnect():
     if "username" in session:
-        emit("system_message", f"{session['username']} left.", broadcast=True)
+        emit("system_message", f"{session['username']} left.", broadcast=True,namespace="/chat")
 
 
-@socketio.on("send_message")
+@socketio.on("send_message", namespace="/chat")
 def handle_message(data):
     global chat_message_id_counter
     username = session.get("username", "Unknown")
     ip_address = session.get("ip_address", None)
+    
+    rate_key = f"{ip_address}|{username}"
+
+    if is_rate_limited(rate_key):
+        emit(
+            "system_message",
+            "You're sending messages too quickly. Please slow down.",
+            namespace="/chat"
+        )
+        return
+
+    
     message = data.get("message", "")[:CHAT_MAX_MESSAGE_LENGTH]  # enforce character limit
-    is_command = data.get("isCommand", False)  # Check if this is a command
-    reply_to_id = data.get("reply_to_id")  # Get the ID of the message this is replying to
+    is_command = data.get("isCommand", False)
+    reply_to_id = data.get("reply_to_id")
 
-    # Check username is never blacklisted, but skip content check for commands
+    # Basic profanity checks
     if is_blacklisted(username):
-        emit("system_message", "Message blocked due to inappropriate content")
+        emit("system_message", "Message blocked due to inappropriate content", namespace="/chat")
         return
-    
-    # Only check message content for profanity if it's not a command
     if not is_command and is_blacklisted(message):
-        emit("system_message", "Message blocked due to inappropriate content")
+        emit("system_message", "Message blocked due to inappropriate content", namespace="/chat")
         return
 
-    msg = {
-        "id": chat_message_id_counter,
-        "username": username,
-        "message": message,
-        "timestamp": datetime.now(),
-        "read_count": 0,
-        "read_users": set(),
-        "reply_to_id": reply_to_id,
-        "ip_address": ip_address
-    }
-    
-    # If this is a reply, add the replied-to message info
+    # Coerce reply_to_id to int if present (defensive)
+    if reply_to_id is not None:
+        try:
+            reply_to_id = int(reply_to_id)
+        except (TypeError, ValueError):
+            reply_to_id = None
+
+    # Build and append message under lock; also handle popping/saving under the same lock
+    popped_msg = None
+    with chat_lock:
+        msg = {
+            "id": chat_message_id_counter,
+            "username": username,
+            "message": message,
+            "timestamp": datetime.now(),
+            "read_count": 0,
+            "read_users": set(),
+            "reply_to_id": reply_to_id,
+            "ip_address": ip_address
+        }
+        chat_messages.append(msg)
+        chat_message_id_counter += 1
+
+        # enforce in-memory cap and persist popped message safely while still holding the lock
+        if len(chat_messages) > CHAT_RECENT_LIMIT:
+            popped_msg = chat_messages.pop(0)
+
+    # persist popped message (if any) outside critical path but after we've removed it
+    if popped_msg:
+        save_chat_message_to_disk(popped_msg)
+
+    # Attach reply metadata (no lock needed here because we only read)
     if reply_to_id:
         original_msg = get_message_by_id(reply_to_id)
         if original_msg:
             msg["reply_to_username"] = original_msg["username"]
             msg["reply_to_message"] = original_msg["message"]
-    
-    chat_messages.append(msg)
-    if len(chat_messages) > CHAT_RECENT_LIMIT:
-        save_chat_message_to_disk(chat_messages.pop(0))
 
-    chat_message_id_counter += 1
-
-    # Build the response with reply info
+    # Build the response (convert timestamp to isoformat)
     response = {
         "id": msg["id"],
         "username": msg["username"],
@@ -443,15 +494,14 @@ def handle_message(data):
         "reply_to_id": msg.get("reply_to_id"),
         "ip_address": msg.get("ip_address")
     }
-    
     if "reply_to_username" in msg:
         response["reply_to_username"] = msg["reply_to_username"]
         response["reply_to_message"] = msg["reply_to_message"]
-    
-    emit("chat_message", response, broadcast=True)
+
+    emit("chat_message", response, broadcast=True, namespace="/chat")
 
 
-@socketio.on("message_read")
+@socketio.on("message_read",namespace="/chat")
 def message_read(data):
     msg_id = data.get("id")
     username = session.get("username")
@@ -462,11 +512,11 @@ def message_read(data):
             if username not in msg['read_users'] and username != msg['username']:
                 msg['read_users'].add(username)
                 msg['read_count'] = len(msg['read_users'])
-                emit("update_read_count", {"id": msg_id, "read_count": msg['read_count']}, broadcast=True)
+                emit("update_read_count", {"id": msg_id, "read_count": msg['read_count']}, broadcast=True,namespace="/chat")
             break
 
 
-@socketio.on("load_older_messages")
+@socketio.on("load_older_messages",namespace="/chat")
 def load_older_messages(data):
     last_id = data.get("last_id")
     user_ip = session.get("ip_address")
@@ -497,68 +547,34 @@ def load_older_messages(data):
     # Then, load from disk for messages older than what's in memory
     if os.path.exists(CHAT_FILE):
         with open(CHAT_FILE, "r", encoding="utf-8") as f:
-            for line in f:
-                parts = line.strip().split('|', 5)
-                if len(parts) >= 4:
-                    msg_id, username, timestamp, *rest = parts
-                    msg_id_int = int(msg_id)
-                    
-                    # Handle multiple formats
-                    if msg_id_int < last_id and msg_id_int not in [m["id"] for m in older_messages]:
-                        if len(rest) == 3:  # New format with reply_to_id and ip: id|username|timestamp|reply_to_id|ip|message
-                            reply_to_id_str, ip_addr, message = rest
-                            reply_to_id = int(reply_to_id_str) if reply_to_id_str else None
-                        elif len(rest) == 2:  # Format with reply_to_id, no ip: id|username|timestamp|reply_to_id|message
-                            reply_to_id_str, message = rest
-                            reply_to_id = int(reply_to_id_str) if reply_to_id_str else None
-                            ip_addr = None
-                        else:  # Old format without reply_to_id: id|username|timestamp|message
-                            message = rest[0]
-                            reply_to_id = None
-                            ip_addr = None
-                        
-                        msg_data = {
-                            "id": msg_id_int,
-                            "username": username,
-                            "message": message,
-                            "timestamp": timestamp,
-                            "read_count": 0,
-                            "ip_address": ip_addr
-                        }
-                        if reply_to_id:
-                            msg_data["reply_to_id"] = reply_to_id
-                            msg_data["reply_to_username"] = ""
-                            msg_data["reply_to_message"] = ""
-                        older_messages.append(msg_data)
+            try:
+                disk_msgs = json.load(f)
+            except Exception:
+                disk_msgs = []
+        for msg_data_json in disk_msgs:
+            msg_id_int = int(msg_data_json.get("id"))
+            if msg_id_int < last_id and msg_id_int not in [m["id"] for m in older_messages]:
+                msg_data = {
+                    "id": msg_id_int,
+                    "username": msg_data_json.get("username"),
+                    "message": msg_data_json.get("message"),
+                    "timestamp": msg_data_json.get("timestamp"),
+                    "read_count": msg_data_json.get("read_count", 0),
+                    "ip_address": msg_data_json.get("ip_address")
+                }
+                if msg_data_json.get("reply_to_id"):
+                    msg_data["reply_to_id"] = msg_data_json.get("reply_to_id")
+                    msg_data["reply_to_username"] = msg_data_json.get("reply_to_username", "")
+                    msg_data["reply_to_message"] = msg_data_json.get("reply_to_message", "")
+                older_messages.append(msg_data)
+
     
     # Sort by ID and send last 50
     older_messages.sort(key=lambda x: x["id"])
-    emit("older_messages", older_messages[-50:])
+    emit("older_messages", older_messages[-50:],namespace="/chat")
 
 
-# ============================================================================
-# SOCKETIO EVENTS - SERVER STATS
-# ============================================================================
-
-@socketio.on("request_stats")
-def handle_stats_request(data):
-    """Send current server stats when requested"""
-    stats = get_server_stats()
-    emit("server_stats", stats)
-
-
-@socketio.on("subscribe_stats")
-def handle_subscribe_stats(data):
-    """Subscribe to real-time server stats updates"""
-    # Send initial stats
-    stats = get_server_stats()
-    emit("server_stats", stats)
-    
-    # To implement continuous updates, emit stats on an interval
-    # The client will use a timer for regular requests instead
-
-
-@socketio.on("delete_message")
+@socketio.on("delete_message",namespace="/chat")
 def handle_delete_message(data):
     msg_id = data.get("id")
     user_ip = session.get("ip_address")
@@ -569,22 +585,22 @@ def handle_delete_message(data):
     # Find the message
     msg = get_message_by_id(msg_id)
     if not msg:
-        emit("system_message", "Message not found")
+        emit("system_message", "Message not found",namespace="/chat")
         return
     
     # Check if the user owns this message (same IP)
     if msg.get("ip_address") != user_ip:
-        emit("system_message", "You can only delete your own messages")
+        emit("system_message", "You can only delete your own messages",namespace="/chat")
         return
     
     # Mark as deleted
     msg["message"] = "[deleted]"
     msg["deleted"] = True
     
-    emit("message_deleted", {"id": msg_id}, broadcast=True)
+    emit("message_deleted", {"id": msg_id}, broadcast=True,namespace="/chat")
 
 
-@socketio.on("edit_message")
+@socketio.on("edit_message",namespace="/chat")
 def handle_edit_message(data):
     msg_id = data.get("id")
     new_message = data.get("message", "").strip()[:CHAT_MAX_MESSAGE_LENGTH]
@@ -596,17 +612,17 @@ def handle_edit_message(data):
     # Find the message
     msg = get_message_by_id(msg_id)
     if not msg:
-        emit("system_message", "Message not found")
+        emit("system_message", "Message not found",namespace="/chat")
         return
     
     # Check if the user owns this message (same IP)
     if msg.get("ip_address") != user_ip:
-        emit("system_message", "You can only edit your own messages")
+        emit("system_message", "You can only edit your own messages",namespace="/chat")
         return
     
     # Check for profanity in edited message
     if is_blacklisted(new_message):
-        emit("system_message", "Message blocked due to inappropriate content")
+        emit("system_message", "Message blocked due to inappropriate content",namespace="/chat")
         return
     
     # Update message
@@ -614,6 +630,27 @@ def handle_edit_message(data):
     msg["edited"] = True
     
     emit("message_edited", {"id": msg_id, "message": new_message}, broadcast=True)
+
+# ============================================================================
+# SOCKETIO EVENTS - SERVER STATS
+# ============================================================================
+
+@socketio.on("request_stats",namespace="/server-stats")
+def handle_stats_request(data):
+    """Send current server stats when requested"""
+    stats = get_server_stats()
+    emit("server_stats", stats,namespace="/server-stats")
+
+
+@socketio.on("subscribe_stats",namespace="/server-stats")
+def handle_subscribe_stats(data):
+    """Subscribe to real-time server stats updates"""
+    # Send initial stats
+    stats = get_server_stats()
+    emit("server_stats", stats,namespace="/server-stats")
+    
+    # To implement continuous updates, emit stats on an interval
+    # The client will use a timer for regular requests instead
 
 
 # ============================================================================
