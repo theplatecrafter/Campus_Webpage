@@ -15,8 +15,10 @@ import time
 
 
 # ============================================================================
-# CONFIGURATION & INITIALIZATION
+# CONFIGURATION & INITIALIZATION & global datas
 # ============================================================================
+namespaces = ["/","/chat", "/server-stats", "/hub-stats","/set-username"] ##  list of all namespaces
+
 
 from init import initialize
 features_folder = "features"
@@ -28,6 +30,9 @@ profanity.load_censor_words()
 # ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
+
+
+
 
 def is_blacklisted(text: str) -> bool:
     """Check if text contains profanity"""
@@ -211,6 +216,9 @@ server_start_time = datetime.now()  # Record when server starts (after loading o
 # ============================================================================
 # STATS FEATURES
 # ============================================================================
+#global tracking variables for stats
+connected_ips = set()  # all unique IPs across all namespaces
+
 
 # Server stats configuration
 STATS_UPDATE_INTERVAL = 3  # seconds
@@ -219,9 +227,16 @@ stats_caches = {}
 stats_locks = defaultdict(threading.Lock)
 
 
+def add_ip(ip):
+    if ip:
+        connected_ips.add(ip)
+
+def remove_ip(ip):
+    if ip in connected_ips:
+        connected_ips.remove(ip)
+
 def start_stats_broadcaster(namespace, stats_func, interval):
     """Start a background broadcaster for a namespace if not already running."""
-    print(f"Starting broadcaster for {namespace}")
 
     with stats_locks[namespace]:
         if namespace in stats_threads:
@@ -229,7 +244,6 @@ def start_stats_broadcaster(namespace, stats_func, interval):
 
         def broadcaster():
             while True:
-                print(f"Broadcasting for {namespace}")
 
                 try:
                     stats = stats_func()
@@ -245,8 +259,14 @@ def start_stats_broadcaster(namespace, stats_func, interval):
 
 def get_hub_stats():
     return {
-        "active_users": len(users_data),
-        "chat_messages_in_memory": len(chat_messages),
+        "ips":{
+            "total_ips": len(users_data),
+            "online_ips": len(connected_ips)
+        },
+        "usernames": {
+            "total_usernames": sum(len(names) for names in users_data.values()),
+            "average_usernames_per_ip": round(sum(len(names) for names in users_data.values()) / len(users_data), 2) if users_data else 0
+        },
         "server_uptime_seconds": int((datetime.now() - server_start_time).total_seconds()),
         "timestamp": datetime.now().isoformat()
     }
@@ -270,7 +290,12 @@ def get_server_stats():
     disk_used_gb = disk.used / (1024 ** 3)
     disk_total_gb = disk.total / (1024 ** 3)
     
-    # Network - get connection count
+    # Network
+    u1,d1 = int(psutil.net_io_counters().bytes_sent), int(psutil.net_io_counters().bytes_recv)
+    time.sleep(0.1)
+    u2,d2 = int(psutil.net_io_counters().bytes_sent), int(psutil.net_io_counters().bytes_recv)
+    sendSpeed = (u2-u1)*10
+    receiveSpeed = (d2-d1)*10
     try:
         net_connections = len(psutil.net_connections())
     except:
@@ -297,7 +322,10 @@ def get_server_stats():
         },
         "network": {
             "connections": net_connections,
-            "active_interfaces": active_interfaces
+            "active_interfaces": active_interfaces,
+            "send": sendSpeed,
+            "receive": receiveSpeed
+
         },
         "timestamp": datetime.now().isoformat()
     }
@@ -714,6 +742,19 @@ def handle_hub_subscribe(data=None):
 
     start_stats_broadcaster(namespace, get_hub_stats, STATS_UPDATE_INTERVAL)
 
+
+for ns in namespaces:
+    @socketio.on("connect", namespace=ns)
+    def handle_connect(ns=ns):  # default arg to capture current namespace
+        ip_address = session.get("ip_address")
+        add_ip(ip_address)
+        print(f"{ip_address} connected to {ns}, total unique IPs: {len(connected_ips)}")
+
+    @socketio.on("disconnect", namespace=ns)
+    def handle_disconnect(ns=ns):
+        ip_address = session.get("ip_address")
+        remove_ip(ip_address)
+        print(f"{ip_address} disconnected from {ns}, total unique IPs: {len(connected_ips)}")
 
 
 

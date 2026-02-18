@@ -8,23 +8,31 @@
     <!-- Active Users -->
     <div class="card">
         <h3>Active Users</h3>
-        <p style="font-size: 1.5rem; font-weight: bold;"><span id="active-users">--</span></p>
+        <div style="margin: 1rem 0;">
+            <p><strong>Total IPs:</strong> <span id="total-ips">--</span></p>
+            <p><strong>Online IPs:</strong> <span id="online-ips">--</span></p>
+        </div>
     </div>
 
-    <!-- Chat Messages in Memory -->
+    <!-- Usernames -->
     <div class="card">
-        <h3>Chat Messages in Memory</h3>
-        <p style="font-size: 1.5rem; font-weight: bold;"><span id="chat-messages">--</span></p>
+        <h3>Usernames</h3>
+        <div style="margin: 1rem 0;">
+            <p><strong>Total Usernames:</strong> <span id="total-usernames">--</span></p>
+            <p><strong>Average Usernames/IP:</strong> <span id="average-usernames-per-ip">--</span></p>
+        </div>
     </div>
 
     <!-- Server Uptime -->
     <div class="card">
         <h3>Server Uptime</h3>
-        <p style="font-size: 1.5rem; font-weight: bold;"><span id="server-uptime">--</span></p>
+        <div style="margin: 1rem 0;">
+            <p><span id="server-uptime">--</span></p>
+        </div>
     </div>
-
-
 </div>
+
+
 <div style="margin-top: 2rem; text-align: center; color: #666;">
     <p>Last updated: <span id="last-updated">--</span></p>
 </div>
@@ -37,9 +45,20 @@ const socket = io("/hub-stats");
 socket.on("stats_update", updateStats);
 
 function updateStats(data) {
-    document.getElementById("active-users").textContent = data.active_users;
-    document.getElementById("chat-messages").textContent = data.chat_messages_in_memory;
-    document.getElementById("server-uptime").textContent = data.server_uptime_seconds + " seconds";
+    // ips
+    document.getElementById("total-ips").textContent = data.ips.total_ips;
+    document.getElementById("online-ips").textContent = data.ips.online_ips;
+
+    //usernames
+    document.getElementById("total-usernames").textContent = data.usernames.total_usernames;
+    document.getElementById("average-usernames-per-ip").textContent = data.usernames.average_usernames_per_ip;
+
+    // server uptime
+    const uptimeSeconds = data.server_uptime_seconds;
+    const uptimeHours = Math.floor(uptimeSeconds / 3600);
+    const uptimeMinutes = Math.floor((uptimeSeconds % 3600) / 60);
+    const uptimeSecondsRemaining = uptimeSeconds % 60;
+    document.getElementById("server-uptime").textContent = `${uptimeHours}h ${uptimeMinutes}m ${uptimeSecondsRemaining}s`;
 
     const date = new Date(data.timestamp);
     document.getElementById("last-updated").textContent = date.toLocaleTimeString();
