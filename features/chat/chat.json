@@ -4,7 +4,7 @@
     "username": "theplatecrafter",
     "message": "test",
     "timestamp": "2026-02-17T20:07:24.280658",
-    "read_count": 1,
+    "read_count": 2,
     "reply_to_id": null,
     "ip_address": "172.24.130.62",
     "edited": false
@@ -14,7 +14,7 @@
     "username": "DEV",
     "message": "test",
     "timestamp": "2026-02-17T20:07:38.295285",
-    "read_count": 0,
+    "read_count": 1,
     "reply_to_id": null,
     "ip_address": "172.24.130.62",
     "edited": false
@@ -22,11 +22,71 @@
   {
     "id": 3,
     "username": "DEV",
-    "message": "hewo",
-    "timestamp": "2026-02-17T20:50:13.420875",
-    "read_count": 0,
+    "message": "hi",
+    "timestamp": "2026-02-17T20:47:14.285471",
+    "read_count": 2,
     "reply_to_id": null,
     "ip_address": "172.24.130.62",
+    "edited": false
+  },
+  {
+    "id": 4,
+    "username": "DEV",
+    "message": "sef",
+    "timestamp": "2026-02-17T20:47:15.460625",
+    "read_count": 2,
+    "reply_to_id": null,
+    "ip_address": "172.24.130.62",
+    "edited": false
+  },
+  {
+    "id": 5,
+    "username": "DEV",
+    "message": "fds",
+    "timestamp": "2026-02-17T20:47:16.597525",
+    "read_count": 2,
+    "reply_to_id": null,
+    "ip_address": "172.24.130.62",
+    "edited": false
+  },
+  {
+    "id": 6,
+    "username": "DEV2",
+    "message": "Hi",
+    "timestamp": "2026-02-17T20:47:48.923373",
+    "read_count": 1,
+    "reply_to_id": null,
+    "ip_address": "172.24.129.8",
+    "edited": false
+  },
+  {
+    "id": 7,
+    "username": "DEV",
+    "message": "hi",
+    "timestamp": "2026-02-17T20:48:51.108839",
+    "read_count": 1,
+    "reply_to_id": null,
+    "ip_address": "172.24.130.62",
+    "edited": false
+  },
+  {
+    "id": 8,
+    "username": "DEV",
+    "message": "hi",
+    "timestamp": "2026-02-17T20:48:53.184698",
+    "read_count": 1,
+    "reply_to_id": 6,
+    "ip_address": "172.24.130.62",
+    "edited": false
+  },
+  {
+    "id": 9,
+    "username": "navi",
+    "message": "HELLO",
+    "timestamp": "2026-02-17T22:06:58.175514",
+    "read_count": 0,
+    "reply_to_id": null,
+    "ip_address": "172.24.133.2",
     "edited": false
   }
 ]
