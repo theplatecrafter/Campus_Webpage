@@ -419,6 +419,10 @@ socket.on("channel_created", (data) => {
     renderChannelTabs();
 });
 
+socket.on("system_message", (message) => {
+    alert(message);
+});
+
 socket.on("channel_joined", (data) => {
     socket.emit("get_user_channels");
 });
@@ -574,13 +578,15 @@ function createChannel() {
     const title = document.getElementById("channelTitle").value.trim();
     const description = document.getElementById("channelDescription").value.trim();
     const tagsStr = document.getElementById("channelTags").value.trim();
-    const tags = tagsStr ? tagsStr.split(",").map(t => t.trim()) : [];
+    const tags = tagsStr ? tagsStr.split(",").map(t => t.trim()).filter(t => t) : [];
     
     if (!title) {
         alert("Channel title is required");
         return;
     }
     
+    // Note: Client-side validation only - server will also validate with is_blacklisted function
+    // Send to server for backend validation including blacklist checking
     socket.emit("create_channel", { title, description, tags });
     closeCreateChannelModal();
 }

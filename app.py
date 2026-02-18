@@ -213,6 +213,31 @@ CHANNELS_FILE = "features/channels/channels.json"
 CHANNEL_TAGS_FILE = "features/channels/channel_tags.json"
 channels_data = {}  # In-memory storage: {channel_id: {info, messages}}
 
+def load_channel_tags():
+    """Load all channel tags from disk"""
+    if os.path.exists(CHANNEL_TAGS_FILE):
+        with open(CHANNEL_TAGS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_channel_tags(tags_data):
+    """Save all channel tags to disk"""
+    os.makedirs("features/channels", exist_ok=True)
+    with open(CHANNEL_TAGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(tags_data, f, indent=2, ensure_ascii=False)
+
+def add_new_tags(tags):
+    """Add new tags to the channel_tags.json file"""
+    if not tags:
+        return
+    tags_data = load_channel_tags()
+    for tag in tags:
+        tag_lower = tag.lower()
+        if tag_lower not in tags_data:
+            tags_data[tag_lower] = {"name": tag, "count": 0}
+        tags_data[tag_lower]["count"] = tags_data[tag_lower].get("count", 0) + 1
+    save_channel_tags(tags_data)
+
 def load_channels():
     """Load all channels from disk"""
     global channels_data
@@ -855,9 +880,31 @@ def handle_create_channel(data):
         emit("system_message", "Invalid channel data")
         return
     
+    # Check for blacklisted content
+    if is_blacklisted(title):
+        print(f"DEBUG: Channel title contains profanity")
+        emit("system_message", "Channel title contains inappropriate content")
+        return
+    
+    if is_blacklisted(description):
+        print(f"DEBUG: Channel description contains profanity")
+        emit("system_message", "Channel description contains inappropriate content")
+        return
+    
+    # Check tags for profanity
+    for tag in tags:
+        if is_blacklisted(tag):
+            print(f"DEBUG: Tag '{tag}' contains profanity")
+            emit("system_message", f"Tag '{tag}' contains inappropriate content")
+            return
+    
     try:
         channel_id = create_channel(title, description, tags, username, ip_address)
         print(f"DEBUG: Channel created successfully with ID: {channel_id}")
+        
+        # Add new tags to channel_tags.json
+        add_new_tags(tags)
+        
         emit("channel_created", {
             "id": channel_id,
             "title": title,

@@ -1,7 +1,9 @@
 {
   "172.24.130.62": {
     "DEV": {
-      "usernames_created": ["DEV"],
+      "usernames_created": [
+        "DEV"
+      ],
       "Chat": {},
       "Channels": {
         "created": [],
@@ -9,7 +11,9 @@
       }
     },
     "theplatecrafter": {
-      "usernames_created": ["theplatecrafter"],
+      "usernames_created": [
+        "theplatecrafter"
+      ],
       "Chat": {},
       "Channels": {
         "created": [],
@@ -19,7 +23,21 @@
   },
   "172.24.133.2": {
     "navi": {
-      "usernames_created": ["navi"],
+      "usernames_created": [
+        "navi"
+      ],
+      "Chat": {},
+      "Channels": {
+        "created": [],
+        "joined": []
+      }
+    }
+  },
+  "172.24.129.8": {
+    "DEV2": {
+      "usernames_created": [
+        "DEV2"
+      ],
       "Chat": {},
       "Channels": {
         "created": [],
