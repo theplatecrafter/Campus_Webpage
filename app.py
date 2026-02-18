@@ -87,7 +87,7 @@ users_data = load_users()
 
 # Chat data
 CHAT_RECENT_LIMIT = 100
-CHAT_FILE = "features/chat/chat.txt"
+CHAT_FILE = "features/chat/chat.json"
 chat_messages = []
 chat_message_id_counter = 1
 CHAT_MAX_MESSAGE_LENGTH = 200  # character limit for messages
@@ -98,35 +98,21 @@ def load_chat_messages():
     global chat_message_id_counter
     if os.path.exists(CHAT_FILE):
         with open(CHAT_FILE, "r", encoding="utf-8") as f:
-            for line in f:
-                parts = line.strip().split('|', 5)
-                if len(parts) >= 4:
-                    msg_id, username, timestamp, *rest = parts
-                    # Handle multiple formats: old (4), with reply (5), with ip (6)
-                    if len(rest) == 3:  # Format with ip: id|username|timestamp|reply_to_id|ip|message
-                        reply_to_id_str, ip_addr, message = rest
-                        reply_to_id = int(reply_to_id_str) if reply_to_id_str else None
-                    elif len(rest) == 2:  # Format with reply, no ip: id|username|timestamp|reply_to_id|message
-                        reply_to_id_str, message = rest
-                        reply_to_id = int(reply_to_id_str) if reply_to_id_str else None
-                        ip_addr = None
-                    else:  # Old format without reply: id|username|timestamp|message
-                        message = rest[0]
-                        reply_to_id = None
-                        ip_addr = None
-                    
-                    msg_obj = {
-                        "id": int(msg_id),
-                        "username": username,
-                        "message": message,
-                        "timestamp": datetime.fromisoformat(timestamp),
-                        "read_count": 0,
-                        "read_users": set(),
-                        "reply_to_id": reply_to_id,
-                        "ip_address": ip_addr
-                    }
-                    chat_messages.append(msg_obj)
-                    chat_message_id_counter = max(chat_message_id_counter, int(msg_id)+1)
+            messages_data = json.load(f)
+            for msg_data in messages_data:
+                msg_obj = {
+                    "id": msg_data["id"],
+                    "username": msg_data["username"],
+                    "message": msg_data["message"],
+                    "timestamp": datetime.fromisoformat(msg_data["timestamp"]),
+                    "read_count": msg_data.get("read_count", 0),
+                    "read_users": set(),
+                    "reply_to_id": msg_data.get("reply_to_id"),
+                    "ip_address": msg_data.get("ip_address"),
+                    "edited": msg_data.get("edited", False)
+                }
+                chat_messages.append(msg_obj)
+                chat_message_id_counter = max(chat_message_id_counter, msg_data["id"] + 1)
         chat_messages[:] = chat_messages[-CHAT_RECENT_LIMIT:]  # only keep recent in RAM
 
 
@@ -139,28 +125,50 @@ def get_message_by_id(msg_id):
 
 
 def save_chat_message_to_disk(msg):
-    """Append a single chat message to disk"""
+    """Save a single chat message to disk (appended to JSON array)"""
     os.makedirs("features/chat", exist_ok=True)
-    with open(CHAT_FILE, "a", encoding="utf-8") as f:
-        reply_to_id = msg.get("reply_to_id", None) or ""
-        ip_addr = msg.get("ip_address", None) or ""
-        line = f'{msg["id"]}|{msg["username"]}|{msg["timestamp"].isoformat()}|{reply_to_id}|{ip_addr}|{msg["message"]}\n'
-        f.write(line)
+    # Load existing messages
+    existing_messages = []
+    if os.path.exists(CHAT_FILE):
+        with open(CHAT_FILE, "r", encoding="utf-8") as f:
+            existing_messages = json.load(f)
+    # Append new message
+    msg_data = {
+        "id": msg["id"],
+        "username": msg["username"],
+        "message": msg["message"],
+        "timestamp": msg["timestamp"].isoformat(),
+        "read_count": msg.get("read_count", 0),
+        "reply_to_id": msg.get("reply_to_id"),
+        "ip_address": msg.get("ip_address"),
+        "edited": msg.get("edited", False)
+    }
+    existing_messages.append(msg_data)
+    # Write back
+    with open(CHAT_FILE, "w", encoding="utf-8") as f:
+        json.dump(existing_messages, f, indent=2, ensure_ascii=False)
 
 
 def save_all_chat_messages_to_disk():
     """Save all in-memory chat messages to disk"""
     if chat_messages:
-        new_messages = [msg for msg in chat_messages if msg["timestamp"] > server_start_time]
-        if new_messages:
-            os.makedirs("features/chat", exist_ok=True)
-            with open(CHAT_FILE, "a", encoding="utf-8") as f:
-                for msg in new_messages:
-                    reply_to_id = msg.get("reply_to_id", None) or ""
-                    ip_addr = msg.get("ip_address", None) or ""
-                    line = f'{msg["id"]}|{msg["username"]}|{msg["timestamp"].isoformat()}|{reply_to_id}|{ip_addr}|{msg["message"]}\n'
-                    f.write(line)
-            print(f"Saved {len(new_messages)} new chat messages to disk on shutdown.")
+        os.makedirs("features/chat", exist_ok=True)
+        messages_data = []
+        for msg in chat_messages:
+            msg_data = {
+                "id": msg["id"],
+                "username": msg["username"],
+                "message": msg["message"],
+                "timestamp": msg["timestamp"].isoformat(),
+                "read_count": msg.get("read_count", 0),
+                "reply_to_id": msg.get("reply_to_id"),
+                "ip_address": msg.get("ip_address"),
+                "edited": msg.get("edited", False)
+            }
+            messages_data.append(msg_data)
+        with open(CHAT_FILE, "w", encoding="utf-8") as f:
+            json.dump(messages_data, f, indent=2, ensure_ascii=False)
+        print(f"Saved {len(chat_messages)} chat messages to disk on shutdown.")
 
 
 # Load chat messages on startup

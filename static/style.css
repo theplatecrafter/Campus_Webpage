@@ -487,6 +487,10 @@ footer p {
   color: var(--primary-red);
 }
 
+.message-bubble.own .message-username {
+  color: white;
+}
+
 .message-body {
   margin: 6px 0;
   color: inherit;
@@ -590,7 +594,7 @@ footer p {
 .reply-to-label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--primary-red);
+  color: #f0f2f5;
   margin-bottom: 4px;
 }
 

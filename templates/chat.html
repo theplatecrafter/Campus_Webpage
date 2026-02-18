@@ -5,10 +5,10 @@
 <div id="messages" style="resize: vertical; overflow: auto;"></div>
 
 <div style="position: relative; margin-top: 10px;">
-    <div id="replyContext" style="display: none; padding: 8px 12px; background: var(--bg-secondary); border-left: 3px solid var(--primary-red); border-radius: 4px; margin-bottom: 10px;">
-        <div style="font-size: 0.85rem; color: var(--text-secondary);">Replying to <span id="replyUsername"></span></div>
-        <div id="replyPreview" style="font-size: 0.9rem; color: var(--text-primary); margin-top: 4px; word-break: break-word;"></div>
-        <button onclick="cancelReply()" style="margin-top: 6px; padding: 4px 8px; font-size: 0.85rem;">Cancel</button>
+    <div id="replyContext" style="display: none; padding: 8px 12px; background: #1a1e27; border-left: 3px solid #ff4757; border-radius: 4px; margin-bottom: 10px;">
+        <div style="font-size: 0.85rem; color: #a8adb5; margin-bottom: 6px;">Replying to <span id="replyUsername" style="color: white; font-weight: 700; background-color: #ff4757; padding: 3px 8px; border-radius: 3px; display: inline-block;"></span></div>
+        <div id="replyPreview" style="font-size: 0.9rem; color: #f0f2f5; margin-top: 4px; word-break: break-word; padding: 6px 8px; background: rgba(255, 71, 87, 0.1); border-radius: 3px;"></div>
+        <button onclick="cancelReply()" style="margin-top: 8px; padding: 6px 12px; font-size: 0.85rem; background-color: #ff4757; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
     </div>
     <div id="autocomplete" style="position: absolute; bottom: 100%; left: 0; background: var(--bg-secondary); border: 1px solid var(--input-border); border-radius: 4px; max-height: 150px; overflow-y: auto; min-width: 200px; display: none; z-index: 10;"></div>
     <textarea id="messageInput" placeholder="Type message (Press Enter to send, Shift+Enter for new line) or /help for commands"></textarea>
@@ -86,7 +86,7 @@ function createMessageBubble(data) {
         
         const replyLabel = document.createElement("div");
         replyLabel.className = "reply-to-label";
-        replyLabel.textContent = `Reply to ${data.reply_to_username}:`;
+        replyLabel.textContent = `Replying to ${data.reply_to_username}:`;
         
         const replyPreview = document.createElement("div");
         replyPreview.className = "reply-to-preview";
