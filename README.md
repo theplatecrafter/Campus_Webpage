@@ -33,7 +33,7 @@ ping google.com
 
 ---
 
-# 2️⃣ Install OpenSSH Server
+## 2️⃣ Install OpenSSH Server
 
 On Ubuntu:
 
@@ -64,7 +64,7 @@ You should see `active (running)`.
 
 ---
 
-# 3️⃣ Connect from Another Machine
+## 3️⃣ Connect from Another Machine
 
 From your other device (Linux / WSL / macOS terminal):
 
@@ -96,7 +96,7 @@ You are now remotely controlling your Ubuntu server.
 
 ---
 
-# 4️⃣ Deploy LANHub App
+## 4️⃣ Deploy LANHub App
 
 On Ubuntu:
 
@@ -155,7 +155,7 @@ Make sure something like "Received <>, shutting down gracefully..." prints.
 
 ---
 
-# 5️⃣ Create systemd Service
+## 5️⃣ Create systemd Service
 
 Create service file:
 
@@ -215,7 +215,34 @@ sudo systemctl status lanhub
 
 ---
 
-# 6️⃣ View Live Logs
+
+
+# Commands Overview (after setup)
+---
+## Disable All Sleep/Hibernation Actions
+```bash
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+```
+
+to undo:
+
+```bash
+sudo systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target
+```
+---
+## Connect to Server Terminal with Another Linux Terminal
+Connect with:
+```bash
+ssh <Ubuntu_username>@<Ubuntu_ip>
+```
+
+Disconnect with:
+```bash
+exit
+```
+---
+
+## View Live Logs
 
 ```bash
 journalctl -u lanhub -f
@@ -225,8 +252,6 @@ This shows real-time server output.
 
 ---
 
-
-# Commands Overview (after setup)
 ## Updating Code Safely
 
 When you update code:
