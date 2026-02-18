@@ -382,7 +382,7 @@ def get_server_stats():
 # ============================================================================
 
 def shutdown(signum, frame):
-    print("Received SIGTERM, shutting down gracefully...")
+    print(f"Received {signum}, shutting down gracefully...")
     exit_function()
     sys.exit(0)
 
