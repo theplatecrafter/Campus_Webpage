@@ -17,7 +17,10 @@ import time
 # CONFIGURATION & INITIALIZATION
 # ============================================================================
 
-
+from init import initialize
+features_folder = "features"
+if not os.path.exists(features_folder):
+    initialize()
 socketio = SocketIO(async_mode="threading")
 profanity.load_censor_words()
 
@@ -50,7 +53,7 @@ def is_rate_limited(key):
 # USER TRACKING FEATURE
 # ============================================================================
 
-USERS_FILE = "features/users.json"
+USERS_FILE = os.path.join(features_folder, "users.json")
 
 def load_users():
     """Load users data from disk"""
@@ -109,7 +112,7 @@ users_data = load_users()
 
 # Chat data
 CHAT_RECENT_LIMIT = 100
-CHAT_FILE = "features/chat/chat.json"
+CHAT_FILE = os.path.join(features_folder, "chat", "chat.json")
 chat_messages = []
 chat_message_id_counter = 1
 CHAT_MAX_MESSAGE_LENGTH = 200  # character limit for messages
