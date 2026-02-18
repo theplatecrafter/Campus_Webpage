@@ -209,29 +209,47 @@ server_start_time = datetime.now()  # Record when server starts (after loading o
 
 
 # ============================================================================
-# SERVER STATS FEATURE
+# STATS FEATURES
 # ============================================================================
 
 # Server stats configuration
 STATS_UPDATE_INTERVAL = 3  # seconds
-stats_thread = None
-stats_thread_lock = threading.Lock()
-cached_stats = None
+stats_threads = {}
+stats_caches = {}
+stats_locks = defaultdict(threading.Lock)
 
-def stats_broadcaster():
-    """Background task: gather stats on interval, cache them, and broadcast."""
-    global cached_stats
-    while True:
-        try:
-            stats = get_server_stats()
-            cached_stats = stats
-            # Broadcast to all clients on the namespace
-            socketio.emit("server_stats", stats, namespace="/server-stats")
-        except Exception as e:
-            # Minimal logging for robustness
-            print("stats_broadcaster error:", e)
-        # Sleep using socketio-compatible sleep (cooperative with eventlet/gevent/threading)
-        socketio.sleep(STATS_UPDATE_INTERVAL)
+
+def start_stats_broadcaster(namespace, stats_func, interval):
+    """Start a background broadcaster for a namespace if not already running."""
+    print(f"Starting broadcaster for {namespace}")
+
+    with stats_locks[namespace]:
+        if namespace in stats_threads:
+            return  # already running
+
+        def broadcaster():
+            while True:
+                print(f"Broadcasting for {namespace}")
+
+                try:
+                    stats = stats_func()
+                    stats_caches[namespace] = stats
+                    socketio.emit("stats_update", stats, namespace=namespace)
+                except Exception as e:
+                    print(f"{namespace} broadcaster error:", e)
+
+                socketio.sleep(interval)
+
+        stats_threads[namespace] = socketio.start_background_task(broadcaster)
+
+
+def get_hub_stats():
+    return {
+        "active_users": len(users_data),
+        "chat_messages_in_memory": len(chat_messages),
+        "server_uptime_seconds": int((datetime.now() - server_start_time).total_seconds()),
+        "timestamp": datetime.now().isoformat()
+    }
 
 
 def get_server_stats():
@@ -305,14 +323,6 @@ def create_app():
 
 
     socketio.init_app(app)
-    with stats_thread_lock:
-        global stats_thread
-        if stats_thread is None:
-            # When using Flask debug auto-reloader, ensure we only start in the reloader child:
-            # WerkZeug sets WERKZEUG_RUN_MAIN == 'true' in the actual running process.
-            # If not running with the reloader (production), start normally.
-            if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
-                stats_thread = socketio.start_background_task(stats_broadcaster)
 
 
     def get_network_display():
@@ -678,21 +688,32 @@ def handle_edit_message(data):
     emit("message_edited", {"id": msg_id, "message": new_message}, broadcast=True)
 
 # ============================================================================
-# SOCKETIO EVENTS - SERVER STATS
+# SOCKETIO EVENTS - STATS
 # ============================================================================
 
 
 @socketio.on("subscribe_stats", namespace="/server-stats")
-def handle_subscribe_stats(data):
-    """Subscribe to real-time server stats updates.
-       Start the background broadcaster once (if not already running)."""
-    global stats_thread
-    # Send initial stats quickly (use cached if available)
-    if cached_stats:
-        emit("server_stats", cached_stats, namespace="/server-stats")
-    else:
-        # If no cached stats yet, compute one-off to reply immediately
-        emit("server_stats", get_server_stats(), namespace="/server-stats")
+def handle_server_subscribe(data=None):
+    namespace = "/server-stats"
+
+    # Send immediate snapshot
+    stats = get_server_stats()
+    emit("stats_update", stats, namespace=namespace)
+
+    # Start broadcaster (only once)
+    start_stats_broadcaster(namespace, get_server_stats, STATS_UPDATE_INTERVAL)
+
+
+@socketio.on("subscribe_stats", namespace="/hub-stats")
+def handle_hub_subscribe(data=None):
+    namespace = "/hub-stats"
+
+
+    stats = get_hub_stats()
+    emit("stats_update", stats, namespace=namespace)
+
+    start_stats_broadcaster(namespace, get_hub_stats, STATS_UPDATE_INTERVAL)
+
 
 
 

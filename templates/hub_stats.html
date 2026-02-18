@@ -4,5 +4,54 @@
 <h2>Hub Stats</h2>
 <p>Real-time Hub statistics (updates every 3 seconds)</p>
 
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+    <!-- Active Users -->
+    <div class="card">
+        <h3>Active Users</h3>
+        <p style="font-size: 1.5rem; font-weight: bold;"><span id="active-users">--</span></p>
+    </div>
 
+    <!-- Chat Messages in Memory -->
+    <div class="card">
+        <h3>Chat Messages in Memory</h3>
+        <p style="font-size: 1.5rem; font-weight: bold;"><span id="chat-messages">--</span></p>
+    </div>
+
+    <!-- Server Uptime -->
+    <div class="card">
+        <h3>Server Uptime</h3>
+        <p style="font-size: 1.5rem; font-weight: bold;"><span id="server-uptime">--</span></p>
+    </div>
+
+
+</div>
+<div style="margin-top: 2rem; text-align: center; color: #666;">
+    <p>Last updated: <span id="last-updated">--</span></p>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const socket = io("/hub-stats");
+
+
+socket.on("stats_update", updateStats);
+
+function updateStats(data) {
+    document.getElementById("active-users").textContent = data.active_users;
+    document.getElementById("chat-messages").textContent = data.chat_messages_in_memory;
+    document.getElementById("server-uptime").textContent = data.server_uptime_seconds + " seconds";
+
+    const date = new Date(data.timestamp);
+    document.getElementById("last-updated").textContent = date.toLocaleTimeString();
+}
+
+socket.on("connect", () => {
+  console.log("Socket connected to /hub-stats, sid:", socket.id);
+  socket.emit("subscribe_stats", {});
+});
+
+socket.on("connect_error", (err) => {
+  console.error("Socket connect error:", err);
+});
+</script>
 {% endblock %}

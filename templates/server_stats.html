@@ -59,6 +59,9 @@
 <script>
 const socket = io("/server-stats");
 
+socket.on("stats_update", updateStats);
+
+
 function updateStats(data) {
     // RAM
     document.getElementById("ram-used").textContent = data.ram.used_gb;
@@ -84,9 +87,9 @@ function updateStats(data) {
     // Timestamp
     const date = new Date(data.timestamp);
     document.getElementById("last-updated").textContent = date.toLocaleTimeString();
+
 }
 
-socket.on("server_stats", updateStats);
 
 socket.on("connect", () => {
   console.log("Socket connected to /server-stats, sid:", socket.id);
@@ -96,7 +99,5 @@ socket.on("connect", () => {
 socket.on("connect_error", (err) => {
   console.error("Socket connect error:", err);
 });
-
-
 </script>
 {% endblock %}
