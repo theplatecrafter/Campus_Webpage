@@ -13,6 +13,7 @@ from collections import defaultdict, deque
 import time
 
 
+
 # ============================================================================
 # CONFIGURATION & INITIALIZATION
 # ============================================================================
@@ -213,6 +214,25 @@ server_start_time = datetime.now()  # Record when server starts (after loading o
 
 # Server stats configuration
 STATS_UPDATE_INTERVAL = 3  # seconds
+stats_thread = None
+stats_thread_lock = threading.Lock()
+cached_stats = None
+
+def stats_broadcaster():
+    """Background task: gather stats on interval, cache them, and broadcast."""
+    global cached_stats
+    while True:
+        try:
+            stats = get_server_stats()
+            cached_stats = stats
+            # Broadcast to all clients on the namespace
+            socketio.emit("server_stats", stats, namespace="/server-stats")
+        except Exception as e:
+            # Minimal logging for robustness
+            print("stats_broadcaster error:", e)
+        # Sleep using socketio-compatible sleep (cooperative with eventlet/gevent/threading)
+        socketio.sleep(STATS_UPDATE_INTERVAL)
+
 
 def get_server_stats():
     """Gather current server statistics"""
@@ -285,6 +305,15 @@ def create_app():
 
 
     socketio.init_app(app)
+    with stats_thread_lock:
+        global stats_thread
+        if stats_thread is None:
+            # When using Flask debug auto-reloader, ensure we only start in the reloader child:
+            # WerkZeug sets WERKZEUG_RUN_MAIN == 'true' in the actual running process.
+            # If not running with the reloader (production), start normally.
+            if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+                stats_thread = socketio.start_background_task(stats_broadcaster)
+
 
     def get_network_display():
         """Return a friendly network name (FQDN if available, otherwise local IP)."""
@@ -395,6 +424,20 @@ def create_app():
             session.clear()
             return redirect(url_for("set_username"))
         return render_template("server_stats.html", username=session["username"])
+
+    # ====================================================================
+    # ROUTES - HUB STATS
+    # ====================================================================
+
+    @app.route("/hub-stats")
+    def hub_stats():
+        if "username" not in session or "ip_address" not in session:
+            return redirect(url_for("set_username"))
+        # Verify username is actually tracked for this IP in users.json
+        if not is_valid_username_for_ip(session["ip_address"], session["username"]):
+            session.clear()
+            return redirect(url_for("set_username"))
+        return render_template("hub_stats.html", username=session["username"])
 
     return app
 
@@ -638,22 +681,20 @@ def handle_edit_message(data):
 # SOCKETIO EVENTS - SERVER STATS
 # ============================================================================
 
-@socketio.on("request_stats",namespace="/server-stats")
-def handle_stats_request(data):
-    """Send current server stats when requested"""
-    stats = get_server_stats()
-    emit("server_stats", stats,namespace="/server-stats")
 
-
-@socketio.on("subscribe_stats",namespace="/server-stats")
+@socketio.on("subscribe_stats", namespace="/server-stats")
 def handle_subscribe_stats(data):
-    """Subscribe to real-time server stats updates"""
-    # Send initial stats
-    stats = get_server_stats()
-    emit("server_stats", stats,namespace="/server-stats")
-    
-    # To implement continuous updates, emit stats on an interval
-    # The client will use a timer for regular requests instead
+    """Subscribe to real-time server stats updates.
+       Start the background broadcaster once (if not already running)."""
+    global stats_thread
+    # Send initial stats quickly (use cached if available)
+    if cached_stats:
+        emit("server_stats", cached_stats, namespace="/server-stats")
+    else:
+        # If no cached stats yet, compute one-off to reply immediately
+        emit("server_stats", get_server_stats(), namespace="/server-stats")
+
+
 
 
 # ============================================================================

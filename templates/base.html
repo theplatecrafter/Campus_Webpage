@@ -18,6 +18,12 @@
                 <p class="header-subtitle">Chats, Games, and Tools for LAN</p>
             </div>
             <div class="header-right">
+                <a href="{{ url_for('home') }}" class="btn-home" aria-label="Home">
+                <img src="{{ url_for('static', filename='assets/home_icon.svg') }}" 
+                    alt="Home" 
+                    class="home-icon">
+                </a>
+
                 <form action="{{ url_for('set_username', change=1) }}" method="get" class="change-username-form">
                     <button type="submit" class="btn-secondary">👤 Change Active Username</button>
                 </form>

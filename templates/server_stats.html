@@ -58,7 +58,6 @@
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script>
 const socket = io("/server-stats");
-const STATS_INTERVAL = 3000; // 3 seconds
 
 function updateStats(data) {
     // RAM
@@ -87,18 +86,17 @@ function updateStats(data) {
     document.getElementById("last-updated").textContent = date.toLocaleTimeString();
 }
 
-socket.on("server_stats", (data) => {
-    updateStats(data);
+socket.on("server_stats", updateStats);
+
+socket.on("connect", () => {
+  console.log("Socket connected to /server-stats, sid:", socket.id);
+  socket.emit("subscribe_stats", {}); // tell server to start broadcaster (or to send initial stats)
 });
 
-// Request stats on connect and then periodically
-socket.on("connect", () => {
-    socket.emit("request_stats", {});
-    
-    // Set up interval to request stats every 3 seconds
-    setInterval(() => {
-        socket.emit("request_stats", {});
-    }, STATS_INTERVAL);
+socket.on("connect_error", (err) => {
+  console.error("Socket connect error:", err);
 });
+
+
 </script>
 {% endblock %}
