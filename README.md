@@ -242,6 +242,29 @@ exit
 ```
 ---
 
+## To start/stop/reload/restart systemctl 
+Reload systemd:
+```bash
+sudo systemctl daemon-reload
+```
+Enable auto-start on boot:
+```bash
+sudo systemctl enable lanhub
+```
+Start server:
+```bash
+sudo systemctl start lanhub
+```
+Stop server:
+```bash
+sudo systemctl stop lanhub
+```
+Check status:
+```bash
+sudo systemctl status lanhub
+```
+
+
 ## View Live Logs
 
 ```bash
