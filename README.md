@@ -1,17 +1,6 @@
-# LANHub Ubuntu Server Setup Guide
-
-This document explains how to:
-
-1. Connect an Ubuntu Desktop LTS machine to campus WiFi
-2. Enable SSH access
-3. Connect from another machine via SSH
-4. Deploy your Flask + SocketIO app
-5. Run it using systemd
-6. Safely update and restart the service
-
+# Steps
 ---
-
-# 1️⃣ Connect Ubuntu Desktop to WiFi
+## 1️⃣ Connect Ubuntu Desktop to WiFi
 
 I have confirmed this setup guide works for Ubuntu Desktop LTS (https://ubuntu.com/download/desktop)
 On Ubuntu Desktop:
@@ -236,7 +225,9 @@ This shows real-time server output.
 
 ---
 
-# 7️⃣ Updating Code Safely
+
+# Commands Overview (after setup)
+## Updating Code Safely
 
 When you update code:
 
@@ -259,7 +250,11 @@ sudo systemctl start lanhub
 
 ---
 
-# 8️⃣ Automatic Restart Behavior
+
+
+
+
+# Automatic Restart Behavior
 
 Because we set:
 
@@ -279,7 +274,7 @@ It will NOT restart if:
 
 ---
 
-# 9️⃣ Optional: Secure SSH (Recommended)
+# Optional: Secure SSH (Recommended)
 
 Generate SSH key on client machine:
 
@@ -317,7 +312,7 @@ Now login uses SSH keys only.
 
 ---
 
-# ✅ You Now Have
+# You Now Have
 
 * Ubuntu running 24/7
 * LAN SSH control
