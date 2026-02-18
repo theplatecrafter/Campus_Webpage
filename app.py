@@ -3,7 +3,8 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 from datetime import datetime, timezone
 from better_profanity import profanity
 import os
-import atexit
+import signal
+import sys
 import psutil
 import socket
 import json
@@ -380,6 +381,10 @@ def get_server_stats():
 # APP INITIALIZATION
 # ============================================================================
 
+def shutdown(signum, frame):
+    print("Received SIGTERM, shutting down gracefully...")
+    exit_function()
+    sys.exit(0)
 
 def exit_function():
     """Save all data when server stops"""
@@ -573,7 +578,8 @@ def create_app():
 
 
 app = create_app()
-atexit.register(exit_function)
+signal.signal(signal.SIGTERM,shutdown)
+signal.signal(signal.SIGINT,shutdown)
 with open(os.path.join(features_folder, "permissions.json"), "r") as f:
     permissions = json.load(f)
 
@@ -856,4 +862,4 @@ for ns in namespaces:
 # ============================================================================
 
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=5000, allow_unsafe_werkzeug=True)
+    socketio.run(app, host="0.0.0.0", port=5000, allow_unsafe_werkzeug=True,debug=False,use_reloader=False)
