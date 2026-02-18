@@ -20,8 +20,8 @@ if not os.path.exists("features/chat"):
 
 
 #users json
-if not os.path.exists("features/chat/chat.json"):
-    with open("features/chat/chat.json", "w") as f:
+if not os.path.exists("features/users.json"):
+    with open("features/users.json", "w") as f:
         f.write("{}")
 
 
