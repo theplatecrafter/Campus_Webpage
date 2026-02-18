@@ -15,6 +15,10 @@ def initialize():
     #chat folder
     if not os.path.exists("features/chat"):
         os.mkdir("features/chat")
+        
+    #logs folder
+    if not os.path.exists("features/logs"):
+        os.mkdir("features/logs")
 
     # ===================
     # FILES
@@ -31,4 +35,26 @@ def initialize():
     #chat json
     if not os.path.exists("features/chat/chat.json"):
         with open("features/chat/chat.json", "w") as f:
+            f.write("[]")
+    
+    #permissions json
+    if not os.path.exists("features/permissions.json"):
+        with open("features/permissions.json", "w") as f:
+            f.write("""{
+    "DEV":0
+}""")
+            
+    # moderation json
+    if not os.path.exists("features/moderation.json"):
+        with open("features/moderation.json", "w") as f:
+            f.write("{}")
+            
+    # moderation log json
+    if not os.path.exists("features/moderation_log.json"):
+        with open("features/logs/moderation_log.json", "w") as f:
+            f.write("{}")
+    
+    # server log json
+    if not os.path.exists("features/server_log.json"):
+        with open("features/logs/server_log.json", "w") as f:
             f.write("{}")

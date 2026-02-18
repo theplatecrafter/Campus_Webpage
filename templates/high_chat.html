@@ -1,0 +1,671 @@
+{% extends "base.html" %}
+{% block title %}High Chat{% endblock %}
+{% block content %}
+
+<h1>High Chat</h1>
+<p style="color: var(--text-secondary); margin-bottom: 2rem;">This is a chat only for users with high permissions.</p>
+<div id="messages" style="resize: vertical; overflow: auto;"></div>
+
+<div style="position: relative; margin-top: 10px;">
+    <div id="replyContext" style="display: none; padding: 8px 12px; background: #1a1e27; border-left: 3px solid #ff4757; border-radius: 4px; margin-bottom: 10px;">
+        <div style="font-size: 0.85rem; color: #a8adb5; margin-bottom: 6px;">Replying to <span id="replyUsername" style="color: white; font-weight: 700; background-color: #ff4757; padding: 3px 8px; border-radius: 3px; display: inline-block;"></span></div>
+        <div id="replyPreview" style="font-size: 0.9rem; color: #f0f2f5; margin-top: 4px; word-break: break-word; padding: 6px 8px; background: rgba(255, 71, 87, 0.1); border-radius: 3px;"></div>
+        <button onclick="cancelReply()" style="margin-top: 8px; padding: 6px 12px; font-size: 0.85rem; background-color: #ff4757; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+    </div>
+    <div id="autocomplete" style="position: absolute; bottom: 100%; left: 0; background: var(--bg-secondary); border: 1px solid var(--input-border); border-radius: 4px; max-height: 150px; overflow-y: auto; min-width: 200px; display: none; z-index: 10;"></div>
+    <textarea id="messageInput" placeholder="Type message (Press Enter to send, Shift+Enter for new line) or /help for commands"></textarea>
+</div>
+<button onclick="sendMessage()" style="margin-top: 10px;">Send</button>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const socket = io("/high-chat");
+let isLoadingMessages = false;
+let oldestMessageId = Infinity;
+let newestMessageId = -Infinity;
+const observedMessages = new Set();
+const messagesDiv = document.getElementById("messages");
+const messagesMap = new Map(); // Store messages by ID for lookup
+let currentUsername = "{{ username }}";
+let currentUserIP = "{{ ip_address }}";
+let isInitialLoad = true;
+let shouldAutoScroll = true; // Track if we should auto-scroll
+let replyingToId = null; // Track which message we're replying to
+let replyingToData = null; // Store the full data of the message we're replying to
+let editingMessageId = null; // Track which message is being edited
+
+// Command registry
+const commands = {
+    "gif": { name: "gif", description: "Display a GIF: /gif <url>" },
+    "help": { name: "help", description: "Show available commands" }
+};
+
+// Month names for date formatting
+const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Function to linkify text - convert URLs to clickable links
+function linkifyText(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    
+    const container = document.createElement("span");
+    parts.forEach(part => {
+        if (urlRegex.test(part)) {
+            const link = document.createElement("a");
+            link.href = part;
+            link.textContent = part;
+            link.target = "_blank";
+            link.style.color = "#0056b3";
+            link.style.textDecoration = "underline";
+            link.style.cursor = "pointer";
+            container.appendChild(link);
+        } else {
+            container.appendChild(document.createTextNode(part));
+        }
+    });
+    return container;
+}
+
+// Create a message bubble element
+function createMessageBubble(data) {
+    const isOwnMessage = data.ip_address === currentUserIP;
+    
+    const group = document.createElement("div");
+    group.className = `message-group ${isOwnMessage ? 'own' : ''}`;
+    
+    const bubble = document.createElement("div");
+    bubble.className = `message-bubble ${isOwnMessage ? 'own' : 'other'}`;
+    bubble.dataset.id = data.id;
+    
+    // If this is a reply, show the replied-to message first
+    if (data.reply_to_id) {
+        const replyContainer = document.createElement("div");
+        replyContainer.className = "reply-to-container";
+        replyContainer.style.cursor = "pointer";
+        replyContainer.addEventListener("click", () => {
+            scrollToMessage(data.reply_to_id);
+        });
+        
+        const replyLabel = document.createElement("div");
+        replyLabel.className = "reply-to-label";
+        replyLabel.textContent = `Replying to ${data.reply_to_username}:`;
+        
+        const replyPreview = document.createElement("div");
+        replyPreview.className = "reply-to-preview";
+        
+        // Truncate the reply text
+        const maxLength = 100;
+        let previewText = data.reply_to_message;
+        if (previewText.startsWith("[GIF]")) {
+            previewText = "[GIF]";
+        }
+        if (previewText.length > maxLength) {
+            replyPreview.textContent = previewText.substring(0, maxLength) + "...";
+        } else {
+            replyPreview.textContent = previewText;
+        }
+        
+        replyContainer.appendChild(replyLabel);
+        replyContainer.appendChild(replyPreview);
+        bubble.appendChild(replyContainer);
+    }
+    
+    // Header with username, reply button, and edit/delete buttons
+    const header = document.createElement("div");
+    header.className = "message-header";
+    
+    const replyButton = document.createElement("button");
+    replyButton.className = "reply-button";
+    replyButton.textContent = "↩";
+    replyButton.title = "Reply to this message";
+    replyButton.addEventListener("click", () => {
+        setReplyingTo(data.id, data.username, data.message);
+    });
+    header.appendChild(replyButton);
+    
+    const username = document.createElement("div");
+    username.className = "message-username";
+    username.textContent = data.username;
+    header.appendChild(username);
+    
+    // Add edit/delete buttons if this is own message
+    if (isOwnMessage) {
+        const actionContainer = document.createElement("div");
+        actionContainer.className = "message-actions";
+        
+        const editButton = document.createElement("button");
+        editButton.className = "action-button edit-button";
+        editButton.textContent = "✎";
+        editButton.title = "Edit message";
+        editButton.addEventListener("click", () => {
+            startEditMessage(data.id, data.message);
+        });
+        actionContainer.appendChild(editButton);
+        
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "action-button delete-button";
+        deleteButton.textContent = "✕";
+        deleteButton.title = "Delete message";
+        deleteButton.addEventListener("click", () => {
+            showDeleteConfirmation(data.id);
+        });
+        actionContainer.appendChild(deleteButton);
+        
+        header.appendChild(actionContainer);
+    }
+    
+    // Message body
+    const body = document.createElement("div");
+    body.className = "message-body";
+    
+    // Check if this is a GIF message
+    if (data.message.startsWith("[GIF]")) {
+        const gifUrl = data.message.substring(5).trim();
+        const img = document.createElement("img");
+        img.src = gifUrl;
+        img.style.maxWidth = "100%";
+        img.style.maxHeight = "300px";
+        img.style.borderRadius = "8px";
+        img.onerror = () => {
+            img.style.display = "none";
+            body.appendChild(document.createTextNode("Failed to load GIF: " + gifUrl));
+        };
+        body.appendChild(img);
+    } else {
+        body.appendChild(linkifyText(data.message));
+    }
+    
+    // Footer with timestamp and read count
+    const footer = document.createElement("div");
+    footer.className = "message-footer";
+    const time = document.createElement("span");
+    const date = new Date(data.timestamp);
+    const dateStr = `${date.getDate()} ${monthNames[date.getMonth()]}`;
+    const timeStr = date.toLocaleTimeString();
+    time.textContent = `${dateStr} ${timeStr}`;
+    const readCount = document.createElement("span");
+    readCount.className = "read-count";
+    readCount.textContent = `(${data.read_count} read)`;
+    footer.appendChild(time);
+    footer.appendChild(readCount);
+    
+    // Show edited indicator if message was edited
+    if (data.edited) {
+        const editedIndicator = document.createElement("span");
+        editedIndicator.className = "edited-indicator";
+        editedIndicator.textContent = "(edited)";
+        footer.appendChild(editedIndicator);
+    }
+    
+    bubble.appendChild(header);
+    bubble.appendChild(body);
+    bubble.appendChild(footer);
+    group.appendChild(bubble);
+    
+    return group;
+}
+
+// Intersection Observer to mark messages as read when visible
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            const bubble = entry.target;
+            if (bubble.dataset && bubble.dataset.id && !observedMessages.has(bubble.dataset.id)) {
+                observedMessages.add(bubble.dataset.id);
+                socket.emit("message_read", {id: parseInt(bubble.dataset.id)});
+            }
+        }
+    });
+}, { root: messagesDiv, threshold: 0.1 });
+
+// Set the message we're replying to
+function setReplyingTo(id, username, message) {
+    replyingToId = id;
+    replyingToData = { id, username, message };
+    
+    const replyContext = document.getElementById("replyContext");
+    const replyUsername = document.getElementById("replyUsername");
+    const replyPreview = document.getElementById("replyPreview");
+    
+    replyUsername.textContent = username;
+    
+    // Truncate message
+    const maxLength = 100;
+    let preview = message;
+    if (preview.startsWith("[GIF]")) {
+        preview = "[GIF]";
+    }
+    if (preview.length > maxLength) {
+        replyPreview.textContent = preview.substring(0, maxLength) + "...";
+    } else {
+        replyPreview.textContent = preview;
+    }
+    
+    replyContext.style.display = "block";
+    document.getElementById("messageInput").focus();
+}
+
+// Cancel reply
+function cancelReply() {
+    replyingToId = null;
+    replyingToData = null;
+    document.getElementById("replyContext").style.display = "none";
+}
+
+// Scroll to original message
+function scrollToMessage(messageId) {
+    const bubble = document.querySelector(`[data-id='${messageId}']`);
+    if (bubble) {
+        bubble.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Highlight the message briefly
+        bubble.style.backgroundColor = "rgba(220, 53, 69, 0.2)";
+        setTimeout(() => {
+            bubble.style.backgroundColor = "";
+        }, 1500);
+    }
+}
+
+// Edit message
+function startEditMessage(messageId, currentText) {
+    const modal = document.createElement("div");
+    modal.className = "edit-modal";
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    `;
+    
+    const modalContent = document.createElement("div");
+    modalContent.style.cssText = `
+        background: var(--bg-primary);
+        padding: 20px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    `;
+    
+    const title = document.createElement("h3");
+    title.textContent = "Edit Message";
+    title.style.marginTop = "0";
+    title.style.color = "var(--text-primary)";
+    modalContent.appendChild(title);
+    
+    const textarea = document.createElement("textarea");
+    textarea.value = currentText;
+    textarea.style.cssText = `
+        width: 100%;
+        height: 100px;
+        padding: 10px;
+        border: 1px solid var(--input-border);
+        border-radius: 4px;
+        font-family: inherit;
+        background: var(--input-bg);
+        color: var(--input-text);
+        box-sizing: border-box;
+        margin-bottom: 10px;
+    `;
+    modalContent.appendChild(textarea);
+    
+    const buttonContainer = document.createElement("div");
+    buttonContainer.style.cssText = "display: flex; gap: 10px; justify-content: flex-end;";
+    
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.style.cssText = "padding: 8px 16px; background: var(--bg-secondary); border: 1px solid var(--input-border); border-radius: 4px; cursor: pointer; color: var(--text-primary);";
+    cancelBtn.addEventListener("click", () => document.body.removeChild(modal));
+    
+    const saveBtn = document.createElement("button");
+    saveBtn.textContent = "Save";
+    saveBtn.style.cssText = "padding: 8px 16px; background: var(--primary-red); color: white; border: none; border-radius: 4px; cursor: pointer;";
+    saveBtn.addEventListener("click", () => {
+        const newText = textarea.value.trim();
+        if (newText) {
+            socket.emit("edit_message", { id: messageId, message: newText });
+            document.body.removeChild(modal);
+        }
+    });
+    
+    buttonContainer.appendChild(cancelBtn);
+    buttonContainer.appendChild(saveBtn);
+    modalContent.appendChild(buttonContainer);
+    
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    textarea.focus();
+}
+
+// Show delete confirmation
+function showDeleteConfirmation(messageId) {
+    const modal = document.createElement("div");
+    modal.className = "delete-modal";
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    `;
+    
+    const modalContent = document.createElement("div");
+    modalContent.style.cssText = `
+        background: var(--bg-primary);
+        padding: 20px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 400px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    `;
+    
+    const title = document.createElement("h3");
+    title.textContent = "Delete Message?";
+    title.style.cssText = "margin-top: 0; color: var(--text-primary);";
+    modalContent.appendChild(title);
+    
+    const message = document.createElement("p");
+    message.textContent = "Are you sure you want to delete this message? This action cannot be undone.";
+    message.style.cssText = "color: var(--text-secondary); margin-bottom: 20px;";
+    modalContent.appendChild(message);
+    
+    const buttonContainer = document.createElement("div");
+    buttonContainer.style.cssText = "display: flex; gap: 10px; justify-content: flex-end;";
+    
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.style.cssText = "padding: 8px 16px; background: var(--bg-secondary); border: 1px solid var(--input-border); border-radius: 4px; cursor: pointer; color: var(--text-primary);";
+    cancelBtn.addEventListener("click", () => document.body.removeChild(modal));
+    
+    const deleteBtn = document.createElement("button");
+    deleteBtn.textContent = "Delete";
+    deleteBtn.style.cssText = "padding: 8px 16px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;";
+    deleteBtn.addEventListener("click", () => {
+        socket.emit("delete_message", { id: messageId });
+        document.body.removeChild(modal);
+    });
+    
+    buttonContainer.appendChild(cancelBtn);
+    buttonContainer.appendChild(deleteBtn);
+    modalContent.appendChild(buttonContainer);
+    
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+}
+
+// Check if scroll is at bottom
+function isScrollAtBottom() {
+    return messagesDiv.scrollTop >= messagesDiv.scrollHeight - messagesDiv.clientHeight - 5;
+}
+
+// Listen for manual scroll
+messagesDiv.addEventListener("scroll", function() {
+    shouldAutoScroll = isScrollAtBottom();
+    
+    // Detect scroll to top and load older messages automatically
+    if (this.scrollTop === 0 && !isLoadingMessages && oldestMessageId !== Infinity) {
+        isLoadingMessages = true;
+        socket.emit("load_older_messages", {last_id: oldestMessageId});
+    }
+}, { passive: true });
+
+socket.on("chat_message", (data) => {
+    messagesMap.set(data.id, data); // Store message for lookup
+    const messageGroup = createMessageBubble(data);
+    messagesDiv.appendChild(messageGroup);
+    observer.observe(messageGroup.querySelector(".message-bubble"));
+    oldestMessageId = Math.min(oldestMessageId, data.id);
+    newestMessageId = Math.max(newestMessageId, data.id);
+    
+    // Auto-scroll to bottom only if we were at bottom
+    if (shouldAutoScroll) {
+        setTimeout(() => {
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }, 0);
+    }
+});
+
+socket.on("system_message", (msg) => {
+    const div = document.createElement("div");
+    div.className = "system-message";
+    div.textContent = msg;
+    messagesDiv.appendChild(div);
+    
+    // Auto-scroll to bottom only if we were at bottom
+    if (shouldAutoScroll) {
+        setTimeout(() => {
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }, 0);
+    }
+});
+
+socket.on("older_messages", (messages) => {
+    isLoadingMessages = false;
+    if (messages.length === 0) return;
+    
+    const scrollHeight = messagesDiv.scrollHeight;
+    const scrollTop = messagesDiv.scrollTop;
+    
+    // Sort messages by ID to ensure correct order
+    messages.sort((a, b) => a.id - b.id);
+    
+    // Insert old messages at the top
+    const fragment = document.createDocumentFragment();
+    messages.forEach(msg => {
+        messagesMap.set(msg.id, msg); // Store message for lookup
+        const messageGroup = createMessageBubble(msg);
+        fragment.appendChild(messageGroup);
+        observer.observe(messageGroup.querySelector(".message-bubble"));
+        oldestMessageId = Math.min(oldestMessageId, msg.id);
+    });
+    
+    messagesDiv.insertBefore(fragment, messagesDiv.firstChild);
+    
+    // Maintain scroll position after inserting at top
+    messagesDiv.scrollTop = messagesDiv.scrollHeight - scrollHeight + scrollTop;
+    
+    // If this is initial load, scroll to bottom after a brief delay
+    if (isInitialLoad) {
+        isInitialLoad = false;
+        shouldAutoScroll = true;
+        setTimeout(() => {
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }, 100);
+    }
+});
+
+socket.on("update_read_count", (data) => {
+    const readCountSpans = document.querySelectorAll(`[data-id='${data.id}'] .read-count`);
+    readCountSpans.forEach(span => {
+        span.textContent = `(${data.read_count} read)`;
+    });
+});
+
+socket.on("message_deleted", (data) => {
+    const bubble = document.querySelector(`[data-id='${data.id}']`);
+    if (bubble) {
+        const bodyDiv = bubble.querySelector(".message-body");
+        if (bodyDiv) {
+            bodyDiv.innerHTML = "";
+            const deletedText = document.createElement("span");
+            deletedText.textContent = "[deleted]";
+            deletedText.style.fontStyle = "italic";
+            deletedText.style.opacity = "0.5";
+            bodyDiv.appendChild(deletedText);
+        }
+    }
+});
+
+socket.on("message_edited", (data) => {
+    const bubble = document.querySelector(`[data-id='${data.id}']`);
+    if (bubble) {
+        const bodyDiv = bubble.querySelector(".message-body");
+        if (bodyDiv) {
+            bodyDiv.innerHTML = "";
+            bodyDiv.appendChild(linkifyText(data.message));
+        }
+        // Add edited indicator if not already there
+        const footer = bubble.querySelector(".message-footer");
+        if (footer && !footer.querySelector(".edited-indicator")) {
+            const editedIndicator = document.createElement("span");
+            editedIndicator.className = "edited-indicator";
+            editedIndicator.textContent = "(edited)";
+            footer.appendChild(editedIndicator);
+        }
+    }
+});
+
+// Handle commands
+function processCommand(input) {
+    const parts = input.trim().split(/\s+/);
+    const command = parts[0].substring(1).toLowerCase(); // Remove "/" and lowercase
+    const args = parts.slice(1).join(" ");
+    
+    if (command === "gif") {
+        if (!args) {
+            socket.emit("send_message", {message: "/gif: Please provide a GIF URL. Usage: /gif <url>", isCommand: true, reply_to_id: replyingToId});
+            return true;
+        }
+        socket.emit("send_message", {message: "[GIF]" + args, isCommand: true, reply_to_id: replyingToId});
+        return true;
+    } else if (command === "help") {
+        let helpText = "Available commands:\n";
+        for (const [key, cmd] of Object.entries(commands)) {
+            helpText += `/${cmd.name}: ${cmd.description}\n`;
+        }
+        socket.emit("send_message", {message: helpText, isCommand: true, reply_to_id: replyingToId});
+        return true;
+    }
+    return false;
+}
+
+function sendMessage() {
+    const input = document.getElementById("messageInput");
+    const message = input.value.trim();
+    
+    if (message === "") return;
+    
+    // Hide autocomplete
+    document.getElementById("autocomplete").style.display = "none";
+    
+    // Check if message is a command
+    if (message.startsWith("/")) {
+        if (!processCommand(message)) {
+            socket.emit("send_message", {message: message, reply_to_id: replyingToId});
+        }
+    } else {
+        socket.emit("send_message", {message: message, reply_to_id: replyingToId});
+    }
+    
+    input.value = "";
+    cancelReply();
+    input.focus();
+}
+
+// Autocomplete functionality
+const autocompleteDiv = document.getElementById("autocomplete");
+const messageInput = document.getElementById("messageInput");
+
+messageInput.addEventListener("input", function() {
+    const input = this.value;
+    
+    // Only show autocomplete if starting with "/"
+    if (!input.startsWith("/")) {
+        autocompleteDiv.style.display = "none";
+        return;
+    }
+    
+    // Extract the command part (everything after "/" up to the first space)
+    const commandMatch = input.match(/^\/([a-zA-Z]*)/);
+    if (!commandMatch) {
+        autocompleteDiv.style.display = "none";
+        return;
+    }
+    
+    const typedCommand = commandMatch[1].toLowerCase();
+    
+    // Filter matching commands
+    const matchingCommands = Object.values(commands).filter(cmd => 
+        cmd.name.startsWith(typedCommand)
+    ).sort((a, b) => a.name.localeCompare(b.name));
+    
+    if (matchingCommands.length === 0) {
+        autocompleteDiv.style.display = "none";
+        return;
+    }
+    
+    // Build autocomplete list
+    autocompleteDiv.innerHTML = "";
+    matchingCommands.forEach(cmd => {
+        const item = document.createElement("div");
+        item.style.cssText = "padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--input-border);";
+        item.textContent = `/${cmd.name} - ${cmd.description}`;
+        item.style.color = "var(--text-primary)";
+        
+        item.addEventListener("mouseenter", function() {
+            this.style.backgroundColor = "var(--primary-red)";
+            this.style.color = "white";
+        });
+        
+        item.addEventListener("mouseleave", function() {
+            this.style.backgroundColor = "transparent";
+            this.style.color = "var(--text-primary)";
+        });
+        
+        item.addEventListener("click", function() {
+            messageInput.value = "/" + cmd.name + " ";
+            autocompleteDiv.style.display = "none";
+            messageInput.focus();
+        });
+        
+        autocompleteDiv.appendChild(item);
+    });
+    
+    autocompleteDiv.style.display = "block";
+});
+
+// Handle Enter to send, Shift+Enter for newline
+messageInput.addEventListener("keydown", function(event) {
+    if (event.key === "Enter") {
+        if (event.shiftKey) {
+            // Shift+Enter: allow default behavior (newline)
+            return;
+        } else {
+            // Enter: send message
+            event.preventDefault();
+            sendMessage();
+        }
+    }
+    // Handle arrow keys for autocomplete navigation (optional enhancement)
+    if (event.key === "Escape") {
+        autocompleteDiv.style.display = "none";
+    }
+});
+
+// Load initial messages on connection
+socket.on("connect", () => {
+    if (!isLoadingMessages) {
+        isLoadingMessages = true;
+        isInitialLoad = true;
+        messagesDiv.innerHTML = ""; // Clear messages
+        messagesMap.clear(); // Clear message map
+        oldestMessageId = Infinity;
+        newestMessageId = -Infinity;
+        observedMessages.clear();
+        shouldAutoScroll = true;
+        socket.emit("load_older_messages", {last_id: 999999999});
+    }
+});
+</script>
+
+{% endblock %}

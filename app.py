@@ -113,10 +113,41 @@ users_data = load_users()
 
 
 # ============================================================================
-# CHAT FEATURE
+# All CHATS #TODO: add chatID, so that we can easily add more chats with these functions
 # ============================================================================
-
-# Chat data
+# example chat.json will look like:
+"""
+{
+    "chat":{
+        "0": {
+            "chat_name": "Live Chat",
+            "description": "For all users",
+            "messages": [
+                {
+                   "id": 1,
+                   "username": "Alice",
+                   "message": "Hello everyone!",
+                   "timestamp": "2024-06-01T12:00:00",
+                   "read_count": 5,
+                   "reply_to_id": null,
+                   "ip_address": "127.0.0.1"
+                   "edited": false
+               }, ...
+            ]
+        }
+    },
+    "high-chat":{
+        "0": {
+            "chat_name": "High Chat",
+            "description": "For all users with permits",
+            "messages": []
+        }
+    }
+}
+"""
+    
+    
+    
 CHAT_RECENT_LIMIT = 100
 CHAT_FILE = os.path.join(features_folder, "chat", "chat.json")
 chat_messages = []
@@ -130,6 +161,7 @@ rate_limit_data = defaultdict(deque)
 
 
 
+    
 def load_chat_messages():
     """Load chat messages from disk into memory"""
     global chat_message_id_counter
@@ -268,6 +300,12 @@ def get_hub_stats():
             "average_usernames_per_ip": round(sum(len(names) for names in users_data.values()) / len(users_data), 2) if users_data else 0
         },
         "server_uptime_seconds": int((datetime.now() - server_start_time).total_seconds()),
+        "features": {
+            "chat": {
+                "total_messages": chat_message_id_counter - 1,
+                "messages_in_memory": len(chat_messages),
+            }
+        },
         "timestamp": datetime.now().isoformat()
     }
 
@@ -330,6 +368,14 @@ def get_server_stats():
         "timestamp": datetime.now().isoformat()
     }
 
+
+# =============================================================================
+# High Chat
+# =============================================================================
+
+
+
+
 # ============================================================================
 # APP INITIALIZATION
 # ============================================================================
@@ -380,13 +426,14 @@ def create_app():
 
     @app.route("/")
     def home():
+        username = session.get("username")
         if "username" not in session or "ip_address" not in session:
             return redirect(url_for("set_username"))
         # Verify username is actually tracked for this IP in users.json
         if not is_valid_username_for_ip(session["ip_address"], session["username"]):
             session.clear()
             return redirect(url_for("set_username"))
-        return render_template("home.html", username=session["username"])
+        return render_template("home.html", username=session["username"], perm=(username in permissions), permlvl=permissions.get(username, None))
 
     @app.route("/set-username", methods=["GET", "POST"])
     def set_username():
@@ -450,7 +497,7 @@ def create_app():
         return {"ip_address": session.get("ip_address")}
 
     # ====================================================================
-    # ROUTES - SERVER STATS
+    # ROUTES - STATS
     # ====================================================================
 
     @app.route("/server-stats")
@@ -463,10 +510,6 @@ def create_app():
             return redirect(url_for("set_username"))
         return render_template("server_stats.html", username=session["username"])
 
-    # ====================================================================
-    # ROUTES - HUB STATS
-    # ====================================================================
-
     @app.route("/hub-stats")
     def hub_stats():
         if "username" not in session or "ip_address" not in session:
@@ -477,15 +520,66 @@ def create_app():
             return redirect(url_for("set_username"))
         return render_template("hub_stats.html", username=session["username"])
 
+    # ====================================================================
+    # ROUTES - DEV/MOD PAGES
+    # ====================================================================
+    # developer 0
+    # server_watcher 1
+    # moderator 2
+    
+    @app.route("/high-chat")
+    def high_chat():
+        if "username" not in session or "ip_address" not in session:
+            return redirect(url_for("set_username"))
+        username = session.get("username")
+        if username in permissions:
+            if permissions[username] in [0,1,2]:
+                return render_template("high_chat.html", username=username)
+        return redirect(url_for("home"))
+
+    @app.route("/admin")
+    def dev_page():
+        if "username" not in session or "ip_address" not in session:
+            return redirect(url_for("set_username"))
+        username = session.get("username")
+        if username in permissions:
+            if permissions[username] == 0:
+                return render_template("admin.html", username=username)
+        return redirect(url_for("home"))
+
+    @app.route("/server-log")
+    def server_log_page():
+        if "username" not in session or "ip_address" not in session:
+            return redirect(url_for("set_username"))
+        username = session.get("username")
+        if username in permissions:
+            if permissions[username] in [0,1]:
+                return render_template("server_log.html", username=username)
+        return redirect(url_for("home"))
+    
+    @app.route("/moderation")
+    def moderation_page():
+        if "username" not in session or "ip_address" not in session:
+            return redirect(url_for("set_username"))
+        username = session.get("username")
+        if username in permissions:
+            if permissions[username] in [0,2]:
+                return render_template("moderation.html", username=username)
+        return redirect(url_for("home"))
+    
+    
+
     return app
 
 
 app = create_app()
 atexit.register(exit_function)
+with open(os.path.join(features_folder, "permissions.json"), "r") as f:
+    permissions = json.load(f)
 
 
 # ============================================================================
-# SOCKETIO EVENTS - CHAT
+# SOCKETIO EVENTS - ALL CHAT
 # ============================================================================
 
 @socketio.on("connect",namespace="/chat")
@@ -713,7 +807,7 @@ def handle_edit_message(data):
     msg["message"] = new_message
     msg["edited"] = True
     
-    emit("message_edited", {"id": msg_id, "message": new_message}, broadcast=True)
+    emit("message_edited", {"id": msg_id, "message": new_message}, broadcast=True,namespace="/chat")
 
 # ============================================================================
 # SOCKETIO EVENTS - STATS
@@ -748,13 +842,11 @@ for ns in namespaces:
     def handle_connect(ns=ns):  # default arg to capture current namespace
         ip_address = session.get("ip_address")
         add_ip(ip_address)
-        print(f"{ip_address} connected to {ns}, total unique IPs: {len(connected_ips)}")
 
     @socketio.on("disconnect", namespace=ns)
     def handle_disconnect(ns=ns):
         ip_address = session.get("ip_address")
         remove_ip(ip_address)
-        print(f"{ip_address} disconnected from {ns}, total unique IPs: {len(connected_ips)}")
 
 
 

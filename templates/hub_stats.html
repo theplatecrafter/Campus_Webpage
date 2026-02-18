@@ -4,6 +4,7 @@
 <h2>Hub Stats</h2>
 <p>Real-time Hub statistics (updates every 3 seconds)</p>
 
+<h3>General</h3>
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
     <!-- Active Users -->
     <div class="card">
@@ -32,6 +33,17 @@
     </div>
 </div>
 
+<h3>Features</h3>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+    <!-- Chat -->
+    <div class="card">
+        <h3>Chat</h3>
+        <div style="margin: 1rem 0;">
+            <p><strong>Total Messages:</strong> <span id="total-chat-messages">--</span></p>
+            <p><strong>Messages in Memory:</strong> <span id="chat-messages-in-memory">--</span></p>
+        </div>
+    </div>
+</div>
 
 <div style="margin-top: 2rem; text-align: center; color: #666;">
     <p>Last updated: <span id="last-updated">--</span></p>
@@ -59,6 +71,10 @@ function updateStats(data) {
     const uptimeMinutes = Math.floor((uptimeSeconds % 3600) / 60);
     const uptimeSecondsRemaining = uptimeSeconds % 60;
     document.getElementById("server-uptime").textContent = `${uptimeHours}h ${uptimeMinutes}m ${uptimeSecondsRemaining}s`;
+
+    // Features - Chat
+    document.getElementById("total-chat-messages").textContent = data.features.chat.total_messages;
+    document.getElementById("chat-messages-in-memory").textContent = data.features.chat.messages_in_memory;
 
     const date = new Date(data.timestamp);
     document.getElementById("last-updated").textContent = date.toLocaleTimeString();

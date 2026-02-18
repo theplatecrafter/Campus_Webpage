@@ -83,4 +83,42 @@
     </div>
 </div>
 
+{% if perm %}
+<!-- Dev/Modder Section (shows if username is in permissions.json)-->
+<h2 class="section-title">👩‍💻 Developers & Modders</h2>
+<div class="feature-grid">
+    <div class="feature-card">
+        <div class="feature-card-icon">🔧</div>
+        <div class="feature-card-title">Dev/Mod Chat</div>
+        <p class="feature-card-description">Chat for developers and moderators.</p>
+        <a href="/high-chat" class="feature-card-link">View Chat →</a>
+    </div>
+    {% if permlvl == 0 %}
+    <div class="feature-card">
+        <div class="feature-card-icon">🛠️</div>
+        <div class="feature-card-title">Admin</div>
+        <p class="feature-card-description">Managing the server.</p>
+        <a href="/admin" class="feature-card-link">View Admin →</a>
+    </div>
+    {% endif %}
+    {% if permlvl in [0,1] %}
+    <div class="feature-card">
+        <div class="feature-card-icon">🛠️</div>
+        <div class="feature-card-title">Server Log</div>
+        <p class="feature-card-description">View server logs.</p>
+        <a href="/server-log" class="feature-card-link">View Logs →</a>
+    </div>
+    {% endif %}
+    {% if permlvl in [0,2] %}
+    <div class="feature-card">
+        <div class="feature-card-icon">🔧</div>
+        <div class="feature-card-title">Modding</div>
+        <p class="feature-card-description">Moderator control panels.</p>
+        <a href="/moderation" class="feature-card-link">View Modding →</a>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+
 {% endblock %}
